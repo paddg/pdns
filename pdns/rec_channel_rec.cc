@@ -438,6 +438,12 @@ uint64_t doGetMallocated()
 extern ResponseStats g_rs;
 
 bool RecursorControlParser::s_init;
+
+uint64_t doGetAvgLatencyUsec()
+{
+  return (uint64_t) g_stats.avgLatencyUsec;
+}
+
 RecursorControlParser::RecursorControlParser()
 {
   if(s_init)
@@ -477,7 +483,7 @@ RecursorControlParser::RecursorControlParser()
   addGetStat("answers100-1000", &g_stats.answers100_1000);
   addGetStat("answers-slow", &g_stats.answersSlow);
 
-  addGetStat("qa-latency", &g_stats.avgLatencyUsec);
+  addGetStat("qa-latency", doGetAvgLatencyUsec);
   addGetStat("unexpected-packets", &g_stats.unexpectedCount);
   addGetStat("case-mismatches", &g_stats.caseMismatchCount);
   addGetStat("spoof-prevents", &g_stats.spoofCount);
