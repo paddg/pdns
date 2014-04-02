@@ -77,6 +77,7 @@ __thread unsigned int t_id;
 unsigned int g_maxTCPPerClient;
 unsigned int g_prefetchRatio;
 unsigned int g_networkTimeoutMsec;
+uint64_t g_latencyStatSize;
 bool g_logCommonErrors;
 bool g_anyToTcp;
 uint16_t g_udpTruncationThreshold;
@@ -697,8 +698,8 @@ void startDoResolve(void *p)
       g_stats.answersSlow++;
 
     uint64_t newLat=(uint64_t)(spent*1000000);
-    if(newLat < 1000000)  // outliers of several minutes exist..
-      g_stats.avgLatencyUsec=(uint64_t)((1-0.0001)*g_stats.avgLatencyUsec + 0.0001*newLat);
+    newLat = min(newLat,(uint64_t)(g_networkTimeoutMsec*1000)); // outliers of several minutes exist..
+    g_stats.avgLatencyUsec=(1-1.0/g_latencyStatSize)*g_stats.avgLatencyUsec + (float)newLat/g_latencyStatSize;
 
       if(prefetch.size() && !variableAnswer) {
         for(vector<DNSResourceRecord>::const_iterator i=prefetch.begin(); i!=prefetch.end(); ++i) {
@@ -903,7 +904,7 @@ string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fr
         memcpy(&dh, response.c_str(), sizeof(dh));
         updateRcodeStats(dh.rcode);
       }
-      g_stats.avgLatencyUsec=(uint64_t)((1-0.0001)*g_stats.avgLatencyUsec + 0); // we assume 0 usec
+      g_stats.avgLatencyUsec=(1-1.0/g_latencyStatSize)*g_stats.avgLatencyUsec + 0.0; // we assume 0 usec
       return 0;
     }
   } 
@@ -1866,7 +1867,11 @@ int serviceMain(int argc, char*argv[])
 
   g_initialDomainMap = parseAuthAndForwards();
 
+<<<<<<< .merge_file_lyn4Ov
   g_prefetchRatio=min(::arg().asNum("prefetch-ratio"), 90); 
+=======
+  g_latencyStatSize=::arg().asNum("latency-statistic-size"); 
+>>>>>>> .merge_file_Z0bXUv
     
   g_logCommonErrors=::arg().mustDo("log-common-errors");
 
@@ -2154,6 +2159,7 @@ int main(int argc, char **argv)
     ::arg().set("serve-rfc1918", "If we should be authoritative for RFC 1918 private IP space")="";
     ::arg().set("lua-dns-script", "Filename containing an optional 'lua' script that will be used to modify dns answers")="";
     ::arg().set("prefetch-ratio", "Prefetch RR if request within <number> percent of TTL. 0=off, maximum is 90")="10";
+    ::arg().set("latency-statistic-size","Number of latency values to calculate the qa-latency average")="10000";
 //    ::arg().setSwitch( "disable-edns-ping", "Disable EDNSPing - EXPERIMENTAL, LEAVE DISABLED" )= "no"; 
     ::arg().setSwitch( "disable-edns", "Disable EDNS - EXPERIMENTAL, LEAVE DISABLED" )= ""; 
     ::arg().setSwitch( "disable-packetcache", "Disable packetcache" )= "no"; 
