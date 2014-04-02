@@ -1867,11 +1867,9 @@ int serviceMain(int argc, char*argv[])
 
   g_initialDomainMap = parseAuthAndForwards();
 
-<<<<<<< .merge_file_lyn4Ov
   g_prefetchRatio=min(::arg().asNum("prefetch-ratio"), 90); 
-=======
+
   g_latencyStatSize=::arg().asNum("latency-statistic-size"); 
->>>>>>> .merge_file_Z0bXUv
     
   g_logCommonErrors=::arg().mustDo("log-common-errors");
 
