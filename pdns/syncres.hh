@@ -28,6 +28,7 @@ struct NegCacheEntry
   string d_name;
   QType d_qtype;
   string d_qname;
+  uint32_t d_authttl;
   uint32_t d_ttd;
   uint32_t getTTD() const
   {
@@ -564,6 +565,7 @@ struct RecursorStats
   uint64_t noPingOutQueries, noEdnsOutQueries;
   uint64_t packetCacheHits;
   uint64_t noPacketError;
+  uint64_t prefetched;
   time_t startupTime;
   unsigned int maxMThreadStackUsage;
 };

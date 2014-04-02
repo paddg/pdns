@@ -35,7 +35,7 @@ int RecursorPacketCache::doWipePacketCache(const string& name, uint16_t qtype)
 }
 
 bool RecursorPacketCache::getResponsePacket(const std::string& queryPacket, time_t now, 
-  std::string* responsePacket, uint32_t* age)
+  std::string* responsePacket, uint32_t* age, unsigned int prefetchRatio)
 {
   struct Entry e;
   e.d_packet=queryPacket;
@@ -47,7 +47,11 @@ bool RecursorPacketCache::getResponsePacket(const std::string& queryPacket, time
     return false;
   }
     
-  if((uint32_t)now < iter->d_ttd) { // it is fresh!
+  uint32_t origTTL = iter->d_ttd - iter->d_creation;
+  uint32_t ratioTTL = origTTL/100*(100-prefetchRatio);
+  if(origTTL>0 && ratioTTL<1) ratioTTL=1;
+
+  if((uint32_t)now < iter->d_creation + ratioTTL) { // it is fresh!
 //    cerr<<"Fresh for another "<<iter->d_ttd - now<<" seconds!"<<endl;
     *age = now - iter->d_creation;
     uint16_t id;

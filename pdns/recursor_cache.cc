@@ -131,6 +131,7 @@ int MemRecursorCache::get(time_t now, const string &qname, const QType& qt, set<
             ttd=k->d_ttd;
             if(res) {
               DNSResourceRecord rr=String2DNSRR(qname, QType(i->d_qtype),  k->d_string, ttd); 
+              rr.authttl=k->d_authttl;
               res->insert(rr);
             }
           }
@@ -249,6 +250,7 @@ void MemRecursorCache::replace(time_t now, const string &qname, const QType& qt,
   // cerr<<"\tHave "<<content.size()<<" records to store\n";
   for(set<DNSResourceRecord>::const_iterator i=content.begin(); i != content.end(); ++i) {
     // cerr<<"To store: "<<i->content<<" with ttl/ttd "<<i->ttl<<endl;
+    dr.d_authttl=i->authttl;
     dr.d_ttd=min(maxTTD, i->ttl);
     dr.d_string=DNSRR2String(*i);
     
@@ -260,6 +262,7 @@ void MemRecursorCache::replace(time_t now, const string &qname, const QType& qt,
       if(range.first != range.second) {
        // cerr<<"\t\tMay need to modify TTL of stored record\n";
         for(vector<StoredRecord>::iterator j=range.first ; j!=range.second; ++j) {
+          j->d_authttl=i->authttl;
           /* see http://mailman.powerdns.com/pipermail/pdns-users/2006-May/003413.html */
           if(j->d_ttd > (unsigned int) now && i->ttl > j->d_ttd && qt.getCode()==QType::NS && auth) { // don't allow auth servers to *raise* TTL of an NS record
             //~ cerr<<"\t\tNot doing so, trying to raise TTL NS\n";

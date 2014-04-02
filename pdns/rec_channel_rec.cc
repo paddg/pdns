@@ -498,6 +498,8 @@ RecursorControlParser::RecursorControlParser()
   addGetStat("noping-outqueries", &g_stats.noPingOutQueries);
   addGetStat("noedns-outqueries", &g_stats.noEdnsOutQueries);
 
+  addGetStat("prefetch-queries", &g_stats.prefetched);
+
   addGetStat("uptime", calculateUptime);
 
   //  addGetStat("query-rate", getQueryRate);

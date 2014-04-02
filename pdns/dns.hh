@@ -91,6 +91,7 @@ public:
   string content; //!< what this record points to. Example: 10.1.2.3
   uint16_t priority; //!< For qtypes that support a priority or preference (MX, SRV)
   uint32_t ttl; //!< Time To Live of this record
+  uint32_t authttl; //!< Authoritative Time To Live of this record
   uint32_t signttl; //!< If non-zero, use this TTL as original TTL in the RRSIG
   int domain_id; //!< If a backend implements this, the domain_id of the zone this record is in
   time_t last_modified; //!< For autocalculating SOA serial numbers - the backend needs to fill this in
@@ -111,6 +112,7 @@ public:
     ar & content;
     ar & priority;
     ar & ttl;
+    ar & authttl;
     ar & domain_id;
     ar & last_modified;
     ar & d_place;

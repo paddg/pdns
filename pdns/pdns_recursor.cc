@@ -75,6 +75,7 @@ StatBag S;
 __thread FDMultiplexer* t_fdm;
 __thread unsigned int t_id;
 unsigned int g_maxTCPPerClient;
+unsigned int g_prefetchRatio;
 unsigned int g_networkTimeoutMsec;
 bool g_logCommonErrors;
 bool g_anyToTcp;
@@ -508,6 +509,7 @@ void startDoResolve(void *p)
     }
     
     vector<DNSResourceRecord> ret;
+    vector<DNSResourceRecord> prefetch;
     vector<uint8_t> packet;
 
     DNSPacketWriter pw(packet, dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_mdp.d_qclass); 
@@ -600,6 +602,10 @@ void startDoResolve(void *p)
         for(vector<DNSResourceRecord>::const_iterator i=ret.begin(); i!=ret.end(); ++i) {
           pw.startRecord(i->qname, i->qtype.getCode(), i->ttl, i->qclass, (DNSPacketWriter::Place)i->d_place); 
           minTTL = min(minTTL, i->ttl);
+          if(!sr.d_outqueries && g_prefetchRatio && i->d_place==DNSResourceRecord::ANSWER) {
+            if(i->ttl<i->authttl*g_prefetchRatio/100)
+              prefetch.push_back(*i);
+          }
           if(i->qtype.getCode() == QType::A) { // blast out A record w/o doing whole dnswriter thing
             uint32_t ip=0;
             IpToU32(i->content, &ip);
@@ -693,6 +699,19 @@ void startDoResolve(void *p)
     uint64_t newLat=(uint64_t)(spent*1000000);
     if(newLat < 1000000)  // outliers of several minutes exist..
       g_stats.avgLatencyUsec=(uint64_t)((1-0.0001)*g_stats.avgLatencyUsec + 0.0001*newLat);
+
+      if(prefetch.size() && !variableAnswer) {
+        for(vector<DNSResourceRecord>::const_iterator i=prefetch.begin(); i!=prefetch.end(); ++i) {
+          t_RC->doAgeCache(g_now.tv_sec, i->qname, i->qtype.getCode(), 0);
+      }
+      vector<DNSResourceRecord> ret;
+      int res = sr.beginResolve(dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), dc->d_mdp.d_qclass, ret);
+      if(res == RCode::NoError) {
+        g_stats.prefetched++;
+        if(!g_quiet)
+          L<<Logger::Warning<<"prefetched: qname="<<dc->d_mdp.d_qname<<" qtype="<<DNSRecordContent::NumberToType(dc->d_mdp.d_qtype)<<endl;
+        }
+      }
 
     delete dc;
     dc=0;
@@ -871,7 +890,7 @@ string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fr
   string response;
   try {
     uint32_t age;
-    if(!SyncRes::s_nopacketcache && t_packetCache->getResponsePacket(question, g_now.tv_sec, &response, &age)) {
+    if(!SyncRes::s_nopacketcache && t_packetCache->getResponsePacket(question, g_now.tv_sec, &response, &age, g_prefetchRatio)) {
       if(!g_quiet)
         L<<Logger::Error<<t_id<< " question answered from packet cache from "<<fromaddr.toString()<<endl;
 
@@ -1846,7 +1865,8 @@ int serviceMain(int argc, char*argv[])
   g_networkTimeoutMsec = ::arg().asNum("network-timeout");
 
   g_initialDomainMap = parseAuthAndForwards();
- 
+
+  g_prefetchRatio=min(::arg().asNum("prefetch-ratio"), 90); 
     
   g_logCommonErrors=::arg().mustDo("log-common-errors");
 
@@ -2133,6 +2153,7 @@ int main(int argc, char **argv)
     ::arg().set("etc-hosts-file", "Path to 'hosts' file")="/etc/hosts";
     ::arg().set("serve-rfc1918", "If we should be authoritative for RFC 1918 private IP space")="";
     ::arg().set("lua-dns-script", "Filename containing an optional 'lua' script that will be used to modify dns answers")="";
+    ::arg().set("prefetch-ratio", "Prefetch RR if request within <number> percent of TTL. 0=off, maximum is 90")="10";
 //    ::arg().setSwitch( "disable-edns-ping", "Disable EDNSPing - EXPERIMENTAL, LEAVE DISABLED" )= "no"; 
     ::arg().setSwitch( "disable-edns", "Disable EDNS - EXPERIMENTAL, LEAVE DISABLED" )= ""; 
     ::arg().setSwitch( "disable-packetcache", "Disable packetcache" )= "no"; 

@@ -98,6 +98,7 @@ int SyncRes::beginResolve(const string &qname, const QType &qtype, uint16_t qcla
     rr.qtype=qtype;
     rr.qclass=QClass::IN;
     rr.ttl=86400;
+    rr.authttl=86400;
     if(qtype.getCode()==QType::PTR)
       rr.content="localhost.";
     else
@@ -115,6 +116,7 @@ int SyncRes::beginResolve(const string &qname, const QType &qtype, uint16_t qcla
     rr.qtype=qtype;
     rr.qclass=qclass;
     rr.ttl=86400;
+    rr.authttl=86400;
     if(pdns_iequals(qname,"version.bind.")  || pdns_iequals(qname,"version.pdns."))
       rr.content="\""+::arg()["version-string"]+"\"";
     else
@@ -1033,6 +1035,9 @@ int SyncRes::doResolveAt(set<string, CIStringCompare> nameservers, string auth, 
             
             DNSResourceRecord rr=*i;
             rr.d_place=DNSResourceRecord::ANSWER;
+
+            rr.authttl = rr.ttl;
+            i->authttl = rr.authttl;
 
             rr.ttl += d_now.tv_sec;
 

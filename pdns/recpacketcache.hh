@@ -19,7 +19,7 @@ class RecursorPacketCache
 {
 public:
   RecursorPacketCache();
-  bool getResponsePacket(const std::string& queryPacket, time_t now, std::string* responsePacket, uint32_t* age);
+  bool getResponsePacket(const std::string& queryPacket, time_t now, std::string* responsePacket, uint32_t* age, unsigned int prefetchRatio);
   void insertResponsePacket(const std::string& responsePacket, time_t now, uint32_t ttd);
   void doPruneTo(unsigned int maxSize=250000);
   int doWipePacketCache(const string& name, uint16_t qtype=0xffff);

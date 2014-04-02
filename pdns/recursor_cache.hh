@@ -51,6 +51,8 @@ private:
 
     string d_string;
 
+    uint32_t d_authttl;
+
     bool operator<(const StoredRecord& rhs) const
     {
       return d_string < rhs.d_string;
