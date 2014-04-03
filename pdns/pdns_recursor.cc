@@ -1210,7 +1210,7 @@ try
   }
   
   if(!t_id) {
-    if(now.tv_sec - last_stat > 1800) { 
+    if(now.tv_sec - last_stat >= 1800) { 
       doStats();
       last_stat=time(0);
     }
@@ -2013,6 +2013,8 @@ try
   
   bool listenOnTCP(true);
 
+  time_t last_carbon=0;
+  time_t carbonInterval=::arg().asNum("carbon-interval");
   counter=0; // used to periodically execute certain tasks
   for(;;) {
     while(MT->schedule(&g_now)); // MTasker letting the mthreads do their thing
@@ -2040,6 +2042,12 @@ try
     }
 
     Utility::gettimeofday(&g_now, 0);
+
+    if(!t_id && (g_now.tv_sec - last_carbon >= carbonInterval)) {
+      MT->makeThread(doCarbonDump, 0);
+      last_carbon = g_now.tv_sec;
+    }
+
     t_fdm->run(&g_now);
     // 'run' updates g_now for us
 
@@ -2111,6 +2119,10 @@ int main(int argc, char **argv)
     ::arg().set("experimental-webserver-port", "Port of webserver to listen on") = "8082";
     ::arg().set("experimental-webserver-password", "Password required for accessing the webserver") = "";
     ::arg().set("experimental-api-config-dir", "Directory where REST API stores config and zones") = "";
+    ::arg().set("carbon-ourname", "If set, overrides our reported hostname for carbon stats")="";
+    ::arg().set("carbon-server", "If set, send metrics in carbon (graphite) format to this server")="";
+    ::arg().set("carbon-interval", "Number of seconds between carbon (graphite) updates")="30";
+    ::arg().set("experimental-api-readonly", "If the JSON API should disallow data modification") = "no";
     ::arg().set("quiet","Suppress logging of questions and answers")="";
     ::arg().set("logging-facility","Facility to log messages as. 0 corresponds to local0")="";
     ::arg().set("config-dir","Location of configuration directory (recursor.conf)")=SYSCONFDIR;
@@ -2125,7 +2137,7 @@ int main(int argc, char **argv)
     ::arg().set("client-tcp-timeout","Timeout in seconds when talking to TCP clients")="2";
     ::arg().set("max-mthreads", "Maximum number of simultaneous Mtasker threads")="2048";
     ::arg().set("max-tcp-clients","Maximum number of simultaneous TCP clients")="128";
-    ::arg().set("server-down-max-fails","Maximum number of consecutive timeouts (and unreachables) to mark a server as down ( 0 => disabled )")="0";
+    ::arg().set("server-down-max-fails","Maximum number of consecutive timeouts (and unreachables) to mark a server as down ( 0 => disabled )")="64";
     ::arg().set("server-down-throttle-time","Number of seconds to throttle all queries to a server after being maked as down")="60";
     ::arg().set("hint-file", "If set, load root hints from this file")="";
     ::arg().set("max-cache-entries", "If set, maximum number of entries in the main cache")="1000000";

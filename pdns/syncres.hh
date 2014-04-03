@@ -221,7 +221,10 @@ public:
       d_cont.erase(i);
     }
   }
-
+  size_t size()
+  {
+    return d_cont.size();
+  }
 private:
   typedef map<Thing,unsigned long> cont_t;
   cont_t d_cont;
@@ -639,5 +642,5 @@ uint64_t* pleaseGetPacketCacheHits();
 uint64_t* pleaseGetPacketCacheSize();
 uint64_t* pleaseWipeCache(const std::string& canon);
 uint64_t* pleaseWipeAndCountNegCache(const std::string& canon);
-
+void doCarbonDump(void*);
 #endif
