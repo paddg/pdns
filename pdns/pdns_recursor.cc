@@ -700,18 +700,18 @@ void startDoResolve(void *p)
     if(newLat < 1000000)  // outliers of several minutes exist..
       g_stats.avgLatencyUsec=(uint64_t)((1-0.0001)*g_stats.avgLatencyUsec + 0.0001*newLat);
 
-      if(prefetch.size() && !variableAnswer) {
-        for(vector<DNSResourceRecord>::const_iterator i=prefetch.begin(); i!=prefetch.end(); ++i) {
-          t_RC->doAgeCache(g_now.tv_sec, i->qname, i->qtype.getCode(), 0);
+    if(prefetch.size() && !variableAnswer) {
+      for(vector<DNSResourceRecord>::const_iterator i=prefetch.begin(); i!=prefetch.end(); ++i) {
+        t_RC->doAgeCache(g_now.tv_sec, i->qname, i->qtype.getCode(), 0);
+    }
+    vector<DNSResourceRecord> ret;
+    int res = sr.beginResolve(dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), dc->d_mdp.d_qclass, ret);
+    if(res == RCode::NoError) {
+      g_stats.prefetched++;
+      if(!g_quiet)
+        L<<Logger::Warning<<"prefetched: qname="<<dc->d_mdp.d_qname<<" qtype="<<DNSRecordContent::NumberToType(dc->d_mdp.d_qtype)<<endl;
       }
-      vector<DNSResourceRecord> ret;
-      int res = sr.beginResolve(dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), dc->d_mdp.d_qclass, ret);
-      if(res == RCode::NoError) {
-        g_stats.prefetched++;
-        if(!g_quiet)
-          L<<Logger::Warning<<"prefetched: qname="<<dc->d_mdp.d_qname<<" qtype="<<DNSRecordContent::NumberToType(dc->d_mdp.d_qtype)<<endl;
-        }
-      }
+    }
 
     delete dc;
     dc=0;
