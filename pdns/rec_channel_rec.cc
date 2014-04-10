@@ -313,6 +313,16 @@ uint64_t getNegCacheSize()
   return broadcastAccFunction<uint64_t>(pleaseGetNegCacheSize);
 }
 
+uint64_t* pleaseGetFailedHostsSize()
+{
+  uint64_t tmp=t_sstorage->fails.size();
+  return new uint64_t(tmp);
+}
+uint64_t getFailedHostsSize()
+{
+  return broadcastAccFunction<uint64_t>(pleaseGetFailedHostsSize);
+}
+
 uint64_t* pleaseGetNsSpeedsSize()
 {
   return new uint64_t(t_sstorage->nsSpeeds.size());
@@ -432,8 +442,14 @@ uint64_t doGetAvgLatencyUsec()
   return (uint64_t) g_stats.avgLatencyUsec;
 }
 
+bool RecursorControlParser::s_init;
+
 RecursorControlParser::RecursorControlParser()
 {
+  if(s_init)
+    return;
+  s_init=true;
+
   addGetStat("questions", &g_stats.qcounter);
   addGetStat("ipv6-questions", &g_stats.ipv6qcounter);
   addGetStat("tcp-questions", &g_stats.tcpqcounter);
@@ -484,6 +500,7 @@ RecursorControlParser::RecursorControlParser()
   addGetStat("throttle-entries", boost::bind(getThrottleSize)); 
 
   addGetStat("nsspeeds-entries", boost::bind(getNsSpeedsSize));
+  addGetStat("failed-host-entries", boost::bind(getFailedHostsSize));
 
   addGetStat("concurrent-queries", boost::bind(getConcurrentQueries)); 
   addGetStat("outgoing-timeouts", &SyncRes::s_outgoingtimeouts);
