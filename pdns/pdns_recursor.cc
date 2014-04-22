@@ -66,6 +66,7 @@
 #include "lua-recursor.hh"
 #include "version.hh"
 #include "responsestats.hh"
+#include <boost/functional/hash.hpp>
 
 #ifndef RECURSOR
 #include "statbag.hh"
@@ -947,7 +948,7 @@ void handleNewUDPQuestion(int fd, FDMultiplexer::funcparam_t& var)
       else {
         string question(data, len);
         if(g_weDistributeQueries)
-          distributeAsyncFunction(boost::bind(doProcessUDPQuestion, question, fromaddr, fd));
+          distributeAsyncFunction(boost::bind(doProcessUDPQuestion, question, fromaddr, fd), question);
         else
           doProcessUDPQuestion(question, fromaddr, fd);
       }
@@ -1272,11 +1273,14 @@ void broadcastFunction(const pipefunc_t& func, bool skipSelf)
     }
   }
 }
-void distributeAsyncFunction(const pipefunc_t& func)
+void distributeAsyncFunction(const pipefunc_t& func, const std::string& question)
 {
-  static unsigned int counter;
-  unsigned int target = 1 + (++counter % (g_pipes.size()-1));
-  // cerr<<"Sending to: "<<target<<endl;
+  DNSComboWriter* dc = new DNSComboWriter(question.c_str(), question.size(), g_now);
+
+  boost::hash<std::string> string_hash;
+  std::size_t qh = string_hash(toLower(dc->d_mdp.d_qname));
+  unsigned int target = 1 + (qh % (g_pipes.size()-1));
+  // cerr<<"Question: "<<dc->d_mdp.d_qname<<" Sending to: "<<target<<endl;
   if(target == t_id) {
     func();
     return;
