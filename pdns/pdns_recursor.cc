@@ -1281,6 +1281,7 @@ void distributeAsyncFunction(const pipefunc_t& func, const std::string& question
   std::size_t qh = string_hash(toLower(dc->d_mdp.d_qname));
   unsigned int target = 1 + (qh % (g_pipes.size()-1));
   // cerr<<"Question: "<<dc->d_mdp.d_qname<<" Sending to: "<<target<<endl;
+  delete dc;
   if(target == t_id) {
     func();
     return;
