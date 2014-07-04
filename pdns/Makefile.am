@@ -113,7 +113,7 @@ pdnssec_SOURCES=pdnssec.cc dbdnsseckeeper.cc sstuff.hh dnsparser.cc dnsparser.hh
 	serialtweaker.cc randomhelper.cc
 
 pdnssec_LDFLAGS=@moduleobjects@ @modulelibs@ @DYNLINKFLAGS@ @LIBDL@ @THREADFLAGS@ $(BOOST_PROGRAM_OPTIONS_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS) 
-pdnssec_LDADD= $(POLARSSL_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS) $(BOOST_SERIALIZATION_LIBS) $(SQLITE3_LIBS) 
+pdnssec_LDADD= $(POLARSSL_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS) $(BOOST_SERIALIZATION_LIBS) $(SQLITE3_LIBS) $(YAHTTP_LIBS)
 
 zone2sql_SOURCES=bindparser.yy bindlexer.l bind-dnssec.schema.sqlite3.sql.h \
 	arguments.cc logger.cc zone2sql.cc statbag.cc misc.cc \
@@ -144,6 +144,20 @@ zone2ldap_SOURCES=bindparser.yy bindlexer.l bind-dnssec.schema.sqlite3.sql.h \
 
 zone2ldap_LDFLAGS=@THREADFLAGS@
 zone2ldap_LDADD= $(POLARSSL_LIBS)
+
+if LMDB
+bin_PROGRAMS += zone2lmdb
+
+zone2lmdb_SOURCES=bindparser.yy bindlexer.l bind-dnssec.schema.sqlite3.sql.h \
+	arguments.cc logger.cc zone2lmdb.cc statbag.cc misc.cc \
+	unix_utility.cc qtype.cc zoneparser-tng.cc dnsrecords.cc \
+	dnswriter.cc dnslabeltext.cc rcpgenerator.cc dnsparser.cc base64.cc sillyrecords.cc \
+	nsecrecords.cc base32.cc bindparserclasses.hh \
+	dns_random.cc dns.cc
+
+zone2lmdb_LDFLAGS=@THREADFLAGS@
+zone2lmdb_LDADD= $(POLARSSL_LIBS) -llmdb
+endif
 
 if BOTAN110
 pdnssec_SOURCES += botan110signers.cc botansigners.cc

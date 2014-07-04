@@ -28,9 +28,9 @@ AC_PROG_MAKE_SET
 AC_LANG([C++])
 
 m4_ifndef([LT_INIT],[
-AC_PROG_LIBTOOL
+AC_PROG_LIBTOOL([disable-static])
 ],[
-LT_INIT
+LT_INIT([disable-static])
 ])
 
 AM_CONDITIONAL([RELEASE_BUILD], [test "$PACKAGE_VERSION" != "git"])
@@ -164,7 +164,6 @@ PDNS_WITH_SYSTEM_POLARSSL
 PDNS_ENABLE_BOTAN
 PDNS_ENABLE_PKCS11
 PDNS_WITH_CRYPTOPP
-PDNS_ENABLE_REMOTEBACKEND_HTTP
 PDNS_ENABLE_REMOTEBACKEND_ZEROMQ
 
 AC_MSG_CHECKING([whether we should build static binaries])
@@ -247,6 +246,7 @@ for a in $modules $dynmodules; do
       ;;
     lmdb)
       PDNS_WITH_LMDB
+      needlmdb=yes
       ;;
     mydns|gmysql|pdns)
       PDNS_WITH_MYSQL
@@ -270,6 +270,8 @@ for a in $modules $dynmodules; do
 done
 
 AM_CONDITIONAL([ORACLE],[test "x$needoracle" = "xyes"])
+
+AM_CONDITIONAL([LMDB],[test "x$needlmdb" = "xyes"])
 
 AM_CONDITIONAL([SQLITE3], [test "x$needsqlite3" = "xyes"])
 if test "$needsqlite3"; then

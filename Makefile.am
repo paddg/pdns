@@ -1,6 +1,6 @@
 SUBDIRS=modules codedocs @programdescend@
 DIST_SUBDIRS=modules codedocs pdns pdns/ext/rapidjson
-EXTRA_DIST=README HACKING INSTALL NOTICE debian-pdns/* pdns.spec  \
+EXTRA_DIST=README INSTALL NOTICE debian-pdns/* pdns.spec  \
 codedocs/doxygen.conf contrib/powerdns.solaris.init.d \
 contrib/systemd-pdns.service contrib/systemd-pdns-recursor.service \
 bootstrap build-scripts/semistaticg++ pdns/docs/dnstcpbench.1 \
@@ -29,5 +29,12 @@ install-exec-local:
 	@echo You may want to copy these to /etc/init.d or equivalent
 	@echo
 	@echo "***********************************************************"
+
+
+# remove .la files. We don't need them, because we use dlopen, not libltdl.
+# If we ever switch to libltdl (to support dynamic loading on OSX, perhaps)
+# remove this hook.
+install-exec-hook:
+	find $(DESTDIR)$(pkglibdir) -type f -name \*.la -delete
 
 
