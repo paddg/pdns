@@ -80,7 +80,7 @@ public:
   ~DNSResourceRecord(){};
 
   void setContent(const string& content);
-  string getZoneRepresentation();
+  string getZoneRepresentation() const;
 
   // data
   
@@ -285,6 +285,7 @@ struct dnsheader {
 #define L theL()
 extern time_t s_starttime;
 std::string questionExpand(const char* packet, uint16_t len, uint16_t& type);
+uint32_t hashQuestion(const char* packet, uint16_t len, uint32_t init);
 bool dnspacketLessThan(const std::string& a, const std::string& b);
 
 /** helper function for both DNSPacket and addSOARecord() - converts a line into a struct, for easier parsing */

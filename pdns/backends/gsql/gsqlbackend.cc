@@ -41,6 +41,11 @@
 #include <boost/format.hpp>
 
 
+boost::format GSQLformat(const string &query) {
+  boost::format format(query);
+  format.exceptions(boost::io::no_error_bits);
+  return format;
+}
 
 void GSQLBackend::setNotified(uint32_t domain_id, uint32_t serial)
 {
@@ -74,7 +79,7 @@ void GSQLBackend::setFresh(uint32_t domain_id)
 
 bool GSQLBackend::isMaster(const string &domain, const string &ip)
 {
-  string query = (boost::format(d_MasterOfDomainsZoneQuery) % sqlEscape(domain)).str();
+  string query = (GSQLformat(d_MasterOfDomainsZoneQuery) % sqlEscape(domain)).str();
 
   try {
     d_db->doQuery(query, d_result);
@@ -102,7 +107,7 @@ bool GSQLBackend::isMaster(const string &domain, const string &ip)
 
 bool GSQLBackend::setMaster(const string &domain, const string &ip)
 {
-  string query = (boost::format(d_UpdateMasterOfZoneQuery) % sqlEscape(ip) % sqlEscape(toLower(domain))).str();
+  string query = (GSQLformat(d_UpdateMasterOfZoneQuery) % sqlEscape(ip) % sqlEscape(toLower(domain))).str();
 
   try {
     d_db->doCommand(query);
@@ -116,7 +121,7 @@ bool GSQLBackend::setMaster(const string &domain, const string &ip)
 bool GSQLBackend::setKind(const string &domain, const DomainInfo::DomainKind kind)
 {
   string kind_str = toUpper(DomainInfo::getKindString(kind));
-  string query = (boost::format(d_UpdateKindOfZoneQuery) % sqlEscape(kind_str) % sqlEscape(toLower(domain))).str();
+  string query = (GSQLformat(d_UpdateKindOfZoneQuery) % sqlEscape(kind_str) % sqlEscape(toLower(domain))).str();
 
   try {
     d_db->doCommand(query);
@@ -273,19 +278,13 @@ GSQLBackend::GSQLBackend(const string &mode, const string &suffix)
     d_dnssecQueries = false;
   }
 
-  string authswitch = d_dnssecQueries ? "-auth" : "";	  
-  d_noWildCardNoIDQuery=getArg("basic-query"+authswitch);
-  d_noWildCardIDQuery=getArg("id-query"+authswitch);
-  d_wildCardNoIDQuery=getArg("wildcard-query"+authswitch);
-  d_wildCardIDQuery=getArg("wildcard-id-query"+authswitch);
+  d_NoIdQuery=getArg("basic-query");
+  d_IdQuery=getArg("id-query");
+  d_ANYNoIdQuery=getArg("any-query");
+  d_ANYIdQuery=getArg("any-id-query");
 
-  d_noWildCardANYNoIDQuery=getArg("any-query"+authswitch);
-  d_noWildCardANYIDQuery=getArg("any-id-query"+authswitch);
-  d_wildCardANYNoIDQuery=getArg("wildcard-any-query"+authswitch);
-  d_wildCardANYIDQuery=getArg("wildcard-any-id-query"+authswitch);
-  
-  d_listQuery=getArg("list-query"+authswitch);
-  d_listSubZoneQuery=getArg("list-subzone-query"+authswitch);
+  d_listQuery=getArg("list-query");
+  d_listSubZoneQuery=getArg("list-subzone-query");
 
   d_MasterOfDomainsZoneQuery=getArg("master-zone-query");
   d_InfoOfDomainsZoneQuery=getArg("info-zone-query");
@@ -294,8 +293,8 @@ GSQLBackend::GSQLBackend(const string &mode, const string &suffix)
   d_GetSuperMasterIPs=getArg("supermaster-name-to-ips");
   d_InsertZoneQuery=getArg("insert-zone-query");
   d_InsertSlaveZoneQuery=getArg("insert-slave-query");
-  d_InsertRecordQuery=getArg("insert-record-query"+authswitch);
-  d_InsertEntQuery=getArg("insert-ent-query"+authswitch);
+  d_InsertRecordQuery=getArg("insert-record-query");
+  d_InsertEntQuery=getArg("insert-ent-query");
   d_UpdateMasterOfZoneQuery=getArg("update-master-query");
   d_UpdateKindOfZoneQuery=getArg("update-kind-query");
   d_UpdateSerialOfZoneQuery=getArg("update-serial-query");
@@ -309,48 +308,44 @@ GSQLBackend::GSQLBackend(const string &mode, const string &suffix)
   d_getAllDomainsQuery=getArg("get-all-domains-query");
 
   d_removeEmptyNonTerminalsFromZoneQuery = getArg("remove-empty-non-terminals-from-zone-query");
-  d_insertEmptyNonTerminalQuery = getArg("insert-empty-non-terminal-query"+authswitch);
+  d_insertEmptyNonTerminalQuery = getArg("insert-empty-non-terminal-query");
   d_deleteEmptyNonTerminalQuery = getArg("delete-empty-non-terminal-query");
 
   d_ListCommentsQuery = getArg("list-comments-query");
   d_InsertCommentQuery = getArg("insert-comment-query");
   d_DeleteCommentRRsetQuery = getArg("delete-comment-rrset-query");
   d_DeleteCommentsQuery = getArg("delete-comments-query");
-  
-  if (d_dnssecQueries)
-  {
-    d_InsertRecordOrderQuery=getArg("insert-record-order-query-auth");
-    d_InsertEntOrderQuery=getArg("insert-ent-order-query-auth");
 
-    d_firstOrderQuery = getArg("get-order-first-query");
-    d_beforeOrderQuery = getArg("get-order-before-query");
-    d_afterOrderQuery = getArg("get-order-after-query");
-    d_lastOrderQuery = getArg("get-order-last-query");
-    d_setOrderAuthQuery = getArg("set-order-and-auth-query");
-    d_nullifyOrderNameAndUpdateAuthQuery = getArg("nullify-ordername-and-update-auth-query");
-    d_nullifyOrderNameAndAuthQuery = getArg("nullify-ordername-and-auth-query");
-    d_setAuthOnDsRecordQuery = getArg("set-auth-on-ds-record-query");
-    
-    d_AddDomainKeyQuery = getArg("add-domain-key-query");
-    d_ListDomainKeysQuery = getArg("list-domain-keys-query");
-    d_ClearDomainAllKeysQuery = getArg("clear-domain-all-keys-query");
-  
-    d_GetAllDomainMetadataQuery = getArg("get-all-domain-metadata-query");  
-    d_GetDomainMetadataQuery = getArg("get-domain-metadata-query");
-    d_ClearDomainMetadataQuery = getArg("clear-domain-metadata-query");
-    d_ClearDomainAllMetadataQuery = getArg("clear-domain-all-metadata-query");
-    d_SetDomainMetadataQuery = getArg("set-domain-metadata-query");
-    
-    d_ActivateDomainKeyQuery = getArg("activate-domain-key-query");
-    d_DeactivateDomainKeyQuery = getArg("deactivate-domain-key-query");
-    d_RemoveDomainKeyQuery = getArg("remove-domain-key-query");
-    d_ClearDomainAllKeysQuery = getArg("clear-domain-all-keys-query");
-    
-    d_getTSIGKeyQuery = getArg("get-tsig-key-query");
-    d_setTSIGKeyQuery = getArg("set-tsig-key-query");
-    d_deleteTSIGKeyQuery = getArg("delete-tsig-key-query");
-    d_getTSIGKeysQuery = getArg("get-tsig-keys-query");
-  }
+  d_InsertRecordOrderQuery=getArg("insert-record-order-query");
+  d_InsertEntOrderQuery=getArg("insert-ent-order-query");
+
+  d_firstOrderQuery = getArg("get-order-first-query");
+  d_beforeOrderQuery = getArg("get-order-before-query");
+  d_afterOrderQuery = getArg("get-order-after-query");
+  d_lastOrderQuery = getArg("get-order-last-query");
+  d_setOrderAuthQuery = getArg("set-order-and-auth-query");
+  d_nullifyOrderNameAndUpdateAuthQuery = getArg("nullify-ordername-and-update-auth-query");
+  d_nullifyOrderNameAndAuthQuery = getArg("nullify-ordername-and-auth-query");
+  d_setAuthOnDsRecordQuery = getArg("set-auth-on-ds-record-query");
+
+  d_AddDomainKeyQuery = getArg("add-domain-key-query");
+  d_ListDomainKeysQuery = getArg("list-domain-keys-query");
+
+  d_GetAllDomainMetadataQuery = getArg("get-all-domain-metadata-query");  
+  d_GetDomainMetadataQuery = getArg("get-domain-metadata-query");
+  d_ClearDomainMetadataQuery = getArg("clear-domain-metadata-query");
+  d_ClearDomainAllMetadataQuery = getArg("clear-domain-all-metadata-query");
+  d_SetDomainMetadataQuery = getArg("set-domain-metadata-query");
+
+  d_ActivateDomainKeyQuery = getArg("activate-domain-key-query");
+  d_DeactivateDomainKeyQuery = getArg("deactivate-domain-key-query");
+  d_RemoveDomainKeyQuery = getArg("remove-domain-key-query");
+  d_ClearDomainAllKeysQuery = getArg("clear-domain-all-keys-query");
+
+  d_getTSIGKeyQuery = getArg("get-tsig-key-query");
+  d_setTSIGKeyQuery = getArg("set-tsig-key-query");
+  d_deleteTSIGKeyQuery = getArg("delete-tsig-key-query");
+  d_getTSIGKeysQuery = getArg("get-tsig-keys-query");
 }
 
 bool GSQLBackend::updateDNSSECOrderAndAuth(uint32_t domain_id, const std::string& zonename, const std::string& qname, bool auth)
@@ -614,9 +609,6 @@ bool GSQLBackend::removeDomainKey(const string& name, unsigned int id)
 
 bool GSQLBackend::getTSIGKey(const string& name, string* algorithm, string* content)
 {
-  if(!d_dnssecQueries)
-    return false;
-    
   char output[1024];  
   snprintf(output,sizeof(output)-1,d_getTSIGKeyQuery.c_str(), sqlEscape(toLower(name)).c_str());
 
@@ -640,9 +632,6 @@ bool GSQLBackend::getTSIGKey(const string& name, string* algorithm, string* cont
 
 bool GSQLBackend::setTSIGKey(const string& name, const string& algorithm, const string& content)
 {
-  if(!d_dnssecQueries)
-    return false;
-
   char output[1024];
   snprintf(output,sizeof(output)-1,d_setTSIGKeyQuery.c_str(), sqlEscape(toLower(name)).c_str(), sqlEscape(toLower(algorithm)).c_str(), sqlEscape(content).c_str());
   try {
@@ -656,9 +645,6 @@ bool GSQLBackend::setTSIGKey(const string& name, const string& algorithm, const 
 
 bool GSQLBackend::deleteTSIGKey(const string& name)
 {
-  if(!d_dnssecQueries)
-    return false;
-
   char output[1024];
   snprintf(output,sizeof(output)-1,d_deleteTSIGKeyQuery.c_str(), sqlEscape(toLower(name)).c_str());
   try {
@@ -672,9 +658,6 @@ bool GSQLBackend::deleteTSIGKey(const string& name)
 
 bool GSQLBackend::getTSIGKeys(std::vector< struct TSIGKey > &keys)
 {
-  if(!d_dnssecQueries)
-    return false;
-
   char output[1024];
   snprintf(output,sizeof(output)-1,"%s",d_getTSIGKeysQuery.c_str());
 
@@ -731,8 +714,6 @@ bool GSQLBackend::getDomainKeys(const string& name, unsigned int kind, std::vect
 
 void GSQLBackend::alsoNotifies(const string &domain, set<string> *ips)
 {
-  if(!d_dnssecQueries)
-    return;
   vector<string> meta;
   getDomainMetadata(domain, "ALSO-NOTIFY", meta);
   BOOST_FOREACH(string& str, meta) {
@@ -742,9 +723,6 @@ void GSQLBackend::alsoNotifies(const string &domain, set<string> *ips)
 
 bool GSQLBackend::getAllDomainMetadata(const string& name, std::map<std::string, std::vector<std::string> >& meta)
 {
-  if(!d_dnssecQueries)
-    return false;
-
   char output[1024];
   snprintf(output,sizeof(output)-1,d_GetAllDomainMetadataQuery.c_str(), sqlEscape(name).c_str());
 
@@ -758,7 +736,8 @@ bool GSQLBackend::getAllDomainMetadata(const string& name, std::map<std::string,
   SSql::row_t row;
 
   while(d_db->getRow(row)) {
-    meta[row[0]].push_back(row[1]);
+    if (!isDnssecDomainMetadata(row[0]))
+      meta[row[0]].push_back(row[1]);
   }
 
   return true;
@@ -767,9 +746,10 @@ bool GSQLBackend::getAllDomainMetadata(const string& name, std::map<std::string,
 
 bool GSQLBackend::getDomainMetadata(const string& name, const std::string& kind, std::vector<std::string>& meta)
 {
-  if(!d_dnssecQueries)
+  if(!d_dnssecQueries && isDnssecDomainMetadata(kind))
     return false;
-  char output[1024];  
+
+  char output[1024];
   snprintf(output,sizeof(output)-1,d_GetDomainMetadataQuery.c_str(), sqlEscape(toLower(name)).c_str(), sqlEscape(kind).c_str());
 
   try {
@@ -789,11 +769,11 @@ bool GSQLBackend::getDomainMetadata(const string& name, const std::string& kind,
 
 bool GSQLBackend::setDomainMetadata(const string& name, const std::string& kind, const std::vector<std::string>& meta)
 {
-  char output[16384];  
-  if(!d_dnssecQueries)
+  if(!d_dnssecQueries && isDnssecDomainMetadata(kind))
     return false;
 
-  string clearQuery = (boost::format(d_ClearDomainMetadataQuery) % sqlEscape(toLower(name)) % sqlEscape(kind)).str();
+  char output[16384];  
+  string clearQuery = (GSQLformat(d_ClearDomainMetadataQuery) % sqlEscape(toLower(name)) % sqlEscape(kind)).str();
 
   try {
     d_db->doCommand(clearQuery);
@@ -814,56 +794,41 @@ bool GSQLBackend::setDomainMetadata(const string& name, const std::string& kind,
 
 void GSQLBackend::lookup(const QType &qtype,const string &qname, DNSPacket *pkt_p, int domain_id)
 {
-  string format;
-  char output[1024];
-
   string lcqname=toLower(qname);
-  
-  // lcqname=labelReverse(makeRelative(lcqname, "net"));
 
+  string query;
   if(qtype.getCode()!=QType::ANY) {
-    // qtype qname domain_id
-    if(domain_id<0) {
-      if(qname[0]=='%')
-        format=d_wildCardNoIDQuery;
-      else
-        format=d_noWildCardNoIDQuery;
-
-      snprintf(output,sizeof(output)-1, format.c_str(),sqlEscape(qtype.getName()).c_str(), sqlEscape(lcqname).c_str());
+    if(domain_id < 0) {
+      query = (GSQLformat(d_NoIdQuery)
+               % sqlEscape(qtype.getName())
+               % sqlEscape(lcqname)
+        ).str();
+    } else {
+      query = (GSQLformat(d_IdQuery)
+               % sqlEscape(qtype.getName())
+               % sqlEscape(lcqname)
+               % domain_id
+        ).str();
     }
-    else {
-      if(qname[0]!='%')
-        format=d_noWildCardIDQuery;
-      else
-        format=d_wildCardIDQuery;
-      snprintf(output,sizeof(output)-1, format.c_str(),sqlEscape(qtype.getName()).c_str(),sqlEscape(lcqname).c_str(),domain_id);
-    }
-  }
-  else {
+  } else {
     // qtype==ANY
-    // qname domain_id
-    if(domain_id<0) {
-      if(qname[0]=='%')
-        format=d_wildCardANYNoIDQuery;
-      else
-        format=d_noWildCardANYNoIDQuery;
-
-      snprintf(output,sizeof(output)-1, format.c_str(),sqlEscape(lcqname).c_str());
-    }
-    else {
-      if(qname[0]!='%')
-        format=d_noWildCardANYIDQuery;
-      else
-        format=d_wildCardANYIDQuery;
-      snprintf(output,sizeof(output)-1, format.c_str(),sqlEscape(lcqname).c_str(),domain_id);
+    if(domain_id < 0) {
+      query = (GSQLformat(d_ANYNoIdQuery)
+               % sqlEscape(lcqname)
+        ).str();
+    } else {
+      query = (GSQLformat(d_ANYIdQuery)
+               % sqlEscape(lcqname)
+               % domain_id
+        ).str();
     }
   }
 
   try {
-    d_db->doQuery(output);
+    d_db->doQuery(query);
   }
   catch(SSqlException &e) {
-    throw PDNSException(e.txtReason());
+    throw PDNSException("GSQLBackend lookup query:"+e.txtReason());
   }
 
   d_qname=qname;
@@ -873,7 +838,7 @@ bool GSQLBackend::list(const string &target, int domain_id, bool include_disable
 {
   DLOG(L<<"GSQLBackend constructing handle for list of domain id '"<<domain_id<<"'"<<endl);
 
-  string query = (boost::format(d_listQuery)
+  string query = (GSQLformat(d_listQuery)
                   % (int)include_disabled
                   % domain_id
     ).str();
@@ -891,7 +856,7 @@ bool GSQLBackend::list(const string &target, int domain_id, bool include_disable
 
 bool GSQLBackend::listSubZone(const string &zone, int domain_id) {
   string wildzone = "%." + zone;
-  string query = (boost::format(d_listSubZoneQuery)
+  string query = (GSQLformat(d_listSubZoneQuery)
                   % sqlEscape(zone)
                   % sqlEscape(wildzone)
                   % domain_id
@@ -935,7 +900,7 @@ bool GSQLBackend::superMasterBackend(const string &ip, const string &domain, con
 
 bool GSQLBackend::createDomain(const string &domain)
 {
-  string query = (boost::format(d_InsertZoneQuery) % toLower(sqlEscape(domain))).str();
+  string query = (GSQLformat(d_InsertZoneQuery) % toLower(sqlEscape(domain))).str();
   try {
     d_db->doCommand(query);
   }
@@ -987,23 +952,19 @@ bool GSQLBackend::deleteDomain(const string &domain)
     return false;
   }
 
-  string recordsQuery = (boost::format(d_DeleteZoneQuery) % di.id).str();
+  string recordsQuery = (GSQLformat(d_DeleteZoneQuery) % di.id).str();
   string metadataQuery;
   string keysQuery;
-  string commentsQuery = (boost::format(d_DeleteCommentsQuery) % di.id).str();
-  string domainQuery = (boost::format(d_DeleteDomainQuery) % sqlDomain).str();
+  string commentsQuery = (GSQLformat(d_DeleteCommentsQuery) % di.id).str();
+  string domainQuery = (GSQLformat(d_DeleteDomainQuery) % sqlDomain).str();
 
-  if (d_dnssecQueries) {
-    metadataQuery = (boost::format(d_ClearDomainAllMetadataQuery) % sqlDomain).str();
-    keysQuery = (boost::format(d_ClearDomainAllKeysQuery) % sqlDomain).str();
-  }
+  metadataQuery = (GSQLformat(d_ClearDomainAllMetadataQuery) % sqlDomain).str();
+  keysQuery = (GSQLformat(d_ClearDomainAllKeysQuery) % sqlDomain).str();
 
   try {
     d_db->doCommand(recordsQuery);
-    if (d_dnssecQueries) {
-      d_db->doCommand(metadataQuery);
-      d_db->doCommand(keysQuery);
-    }
+    d_db->doCommand(metadataQuery);
+    d_db->doCommand(keysQuery);
     d_db->doCommand(commentsQuery);
     d_db->doCommand(domainQuery);
   }
@@ -1016,7 +977,7 @@ bool GSQLBackend::deleteDomain(const string &domain)
 void GSQLBackend::getAllDomains(vector<DomainInfo> *domains, bool include_disabled)
 {
   DLOG(L<<"GSQLBackend retrieving all domains."<<endl);
-  string query = (boost::format(d_getAllDomainsQuery) % (int)include_disabled).str();
+  string query = (GSQLformat(d_getAllDomainsQuery) % (int)include_disabled).str();
 
   try {
     d_db->doQuery(query);
@@ -1093,13 +1054,13 @@ bool GSQLBackend::replaceRRSet(uint32_t domain_id, const string& qname, const QT
 {
   string query;
   if (qt != QType::ANY) {
-    query = (boost::format(d_DeleteRRSetQuery)
+    query = (GSQLformat(d_DeleteRRSetQuery)
              % domain_id
              % sqlEscape(qname)
              % sqlEscape(qt.getName())
       ).str();
   } else {
-    query = (boost::format(d_DeleteNamesQuery)
+    query = (GSQLformat(d_DeleteNamesQuery)
              % domain_id
              % sqlEscape(qname)
       ).str();
@@ -1113,7 +1074,7 @@ bool GSQLBackend::replaceRRSet(uint32_t domain_id, const string& qname, const QT
 
   if (rrset.empty()) {
     // zap comments for now non-existing rrset
-    query = (boost::format(d_DeleteCommentRRsetQuery)
+    query = (GSQLformat(d_DeleteCommentRRsetQuery)
              % domain_id
              % sqlEscape(qname)
              % sqlEscape(qt.getName())
@@ -1135,32 +1096,9 @@ bool GSQLBackend::replaceRRSet(uint32_t domain_id, const string& qname, const QT
 bool GSQLBackend::feedRecord(const DNSResourceRecord &r, string *ordername)
 {
   string query;
-  if(d_dnssecQueries) {
-    if(ordername)
-      query = (boost::format(d_InsertRecordOrderQuery)
-               % sqlEscape(r.content)
-               % r.ttl
-               % r.priority
-               % sqlEscape(r.qtype.getName())
-               % r.domain_id
-               % (int)r.disabled
-               % toLower(sqlEscape(r.qname))
-               % sqlEscape(*ordername)
-               % (int)r.auth
-        ).str();
-    else
-      query = (boost::format(d_InsertRecordQuery)
-               % sqlEscape(r.content)
-               % r.ttl
-               % r.priority
-               % sqlEscape(r.qtype.getName())
-               % r.domain_id
-               % (int)r.disabled
-               % toLower(sqlEscape(r.qname))
-               % (int)r.auth
-        ).str();
-  } else {
-    query = (boost::format(d_InsertRecordQuery)
+
+  if(d_dnssecQueries && ordername)
+    query = (GSQLformat(d_InsertRecordOrderQuery)
              % sqlEscape(r.content)
              % r.ttl
              % r.priority
@@ -1168,8 +1106,20 @@ bool GSQLBackend::feedRecord(const DNSResourceRecord &r, string *ordername)
              % r.domain_id
              % (int)r.disabled
              % toLower(sqlEscape(r.qname))
+             % sqlEscape(*ordername)
+             % (int)(r.auth)
       ).str();
-  }
+  else
+    query = (GSQLformat(d_InsertRecordQuery)
+             % sqlEscape(r.content)
+             % r.ttl
+             % r.priority
+             % sqlEscape(r.qtype.getName())
+             % r.domain_id
+             % (int)r.disabled
+             % toLower(sqlEscape(r.qname))
+             % (int)(r.auth || !d_dnssecQueries)
+      ).str();
 
   try {
     d_db->doCommand(query);
@@ -1187,17 +1137,11 @@ bool GSQLBackend::feedEnts(int domain_id, map<string,bool>& nonterm)
 
   BOOST_FOREACH(nt, nonterm) {
 
-    if (!d_dnssecQueries)
-      query = (boost::format(d_InsertEntQuery)
-               % domain_id
-               % toLower(sqlEscape(nt.first))
-       ).str();
-    else
-      query = (boost::format(d_InsertEntQuery)
-               % domain_id
-               % toLower(sqlEscape(nt.first))
-               % 1
-       ).str();
+    query = (GSQLformat(d_InsertEntQuery)
+             % domain_id
+             % toLower(sqlEscape(nt.first))
+             % (int)(nt.second || !d_dnssecQueries)
+      ).str();
 
     try {
       d_db->doCommand(query);
@@ -1220,14 +1164,14 @@ bool GSQLBackend::feedEnts3(int domain_id, const string &domain, map<string,bool
   BOOST_FOREACH(nt, nonterm) {
 
     if(narrow || !nt.second) {
-      query = (boost::format(d_InsertEntQuery)
+      query = (GSQLformat(d_InsertEntQuery)
                % domain_id
                % toLower(sqlEscape(nt.first))
                % nt.second
        ).str();
     } else {
       ordername=toBase32Hex(hashQNameWithSalt(times, salt, nt.first));
-      query = (boost::format(d_InsertEntOrderQuery)
+      query = (GSQLformat(d_InsertEntOrderQuery)
                % domain_id
                % toLower(sqlEscape(nt.first))
                % toLower(sqlEscape(ordername))
@@ -1315,7 +1259,7 @@ bool GSQLBackend::calculateSOASerial(const string& domain, const SOAData& sd, ti
 
 bool GSQLBackend::listComments(const uint32_t domain_id)
 {
-  string query = (boost::format(d_ListCommentsQuery)
+  string query = (GSQLformat(d_ListCommentsQuery)
                   % domain_id
     ).str();
 
@@ -1350,7 +1294,7 @@ bool GSQLBackend::getComment(Comment& comment)
 
 void GSQLBackend::feedComment(const Comment& comment)
 {
-  string query = (boost::format(d_InsertCommentQuery)
+  string query = (GSQLformat(d_InsertCommentQuery)
                   % comment.domain_id
                   % toLower(sqlEscape(comment.qname))
                   % sqlEscape(comment.qtype.getName())
@@ -1370,7 +1314,7 @@ void GSQLBackend::feedComment(const Comment& comment)
 bool GSQLBackend::replaceComments(const uint32_t domain_id, const string& qname, const QType& qt, const vector<Comment>& comments)
 {
   string query;
-    query = (boost::format(d_DeleteCommentRRsetQuery)
+    query = (GSQLformat(d_DeleteCommentRRsetQuery)
              % domain_id
              % toLower(sqlEscape(qname))
              % sqlEscape(qt.getName())

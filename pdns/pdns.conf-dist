@@ -35,6 +35,21 @@
 # cache-ttl=20
 
 #################################
+# carbon-interval	Number of seconds between carbon (graphite) updates
+#
+# carbon-interval=30
+
+#################################
+# carbon-ourname	If set, overrides our reported hostname for carbon stats
+#
+# carbon-ourname=
+
+#################################
+# carbon-server	If set, send metrics in carbon (graphite) format to this server
+#
+# carbon-server=
+
+#################################
 # chroot	If set, chroot to this directory for more security
 #
 # chroot=
@@ -105,6 +120,11 @@
 # disable-axfr=no
 
 #################################
+# disable-axfr-rectify	Disable the rectify step during an outgoing AXFR. Only required for regression testing.
+#
+# disable-axfr-rectify=no
+
+#################################
 # disable-tcp	Do not listen to TCP queries
 #
 # disable-tcp=no
@@ -120,11 +140,6 @@
 # do-ipv6-additional-processing=yes
 
 #################################
-# edns-subnet-option-numbers	Comma separated list of whitelisted non-standard EDNS subnet option codes (8 is always included)
-#
-# edns-subnet-option-numbers=20730
-
-#################################
 # edns-subnet-processing	If we should act on EDNS Subnet options
 #
 # edns-subnet-processing=no
@@ -138,6 +153,11 @@
 # experimental-api-readonly	If the JSON API should disallow data modification
 #
 # experimental-api-readonly=no
+
+#################################
+# experimental-dname-processing	If we should support DNAME records
+#
+# experimental-dname-processing=no
 
 #################################
 # experimental-json-interface	If the webserver should serve JSON data
@@ -262,7 +282,7 @@
 #################################
 # module-dir	Default directory for modules
 #
-# module-dir=/usr/local/lib
+# module-dir=/usr/local/lib/pdns
 
 #################################
 # negquery-cache-ttl	Seconds to store negative query results in the QueryCache

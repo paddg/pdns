@@ -672,29 +672,26 @@ int makeIPv6sockaddr(const std::string& addr, struct sockaddr_in6* ret)
     port = atoi(addr.c_str()+pos+2);  
   }
   
-  struct addrinfo* res;
-  struct addrinfo hints;
-  memset(&hints, 0, sizeof(hints));
+  if(inet_pton(AF_INET6, ourAddr.c_str(), (void*)&ret->sin6_addr) != 1) {
+    struct addrinfo* res;
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    
+    hints.ai_family = AF_INET6;
+    hints.ai_flags = AI_NUMERICHOST;
+    
+    int error;
+    if((error=getaddrinfo(ourAddr.c_str(), 0, &hints, &res))) { // this is correct
+      return -1;
+    }
   
-  hints.ai_family = AF_INET6;
-  hints.ai_flags = AI_NUMERICHOST;
-  
-  int error;
-  if((error=getaddrinfo(ourAddr.c_str(), 0, &hints, &res))) { // this is correct
-    /*
-    cerr<<"Error translating IPv6 address '"<<addr<<"': ";
-    if(error==EAI_SYSTEM)
-      cerr<<strerror(errno)<<endl;
-    else
-      cerr<<gai_strerror(error)<<endl;
-    */
-    return -1;
+    memcpy(ret, res->ai_addr, res->ai_addrlen);
+    freeaddrinfo(res);
   }
-  
-  memcpy(ret, res->ai_addr, res->ai_addrlen);
+
   if(port >= 0)
     ret->sin6_port = htons(port);
-  freeaddrinfo(res);
+
   return 0;
 }
 
@@ -777,7 +774,7 @@ Regex::Regex(const string &expr)
 
 void addCMsgSrcAddr(struct msghdr* msgh, void* cmsgbuf, ComboAddress* source)
 {
-  struct cmsghdr *cmsg;
+  struct cmsghdr *cmsg = NULL;
 
   if(source->sin4.sin_family == AF_INET6) {
     struct in6_pktinfo *pkt;
@@ -810,6 +807,7 @@ void addCMsgSrcAddr(struct msghdr* msgh, void* cmsgbuf, ComboAddress* source)
     pkt = (struct in_pktinfo *) CMSG_DATA(cmsg);
     memset(pkt, 0, sizeof(*pkt));
     pkt->ipi_spec_dst = source->sin4.sin_addr;
+    msgh->msg_controllen = cmsg->cmsg_len;
 #endif
 #ifdef IP_SENDSRCADDR
     struct in_addr *in;
@@ -824,8 +822,8 @@ void addCMsgSrcAddr(struct msghdr* msgh, void* cmsgbuf, ComboAddress* source)
 
     in = (struct in_addr *) CMSG_DATA(cmsg);
     *in = source->sin4.sin_addr;
-#endif
     msgh->msg_controllen = cmsg->cmsg_len;
+#endif
   }
 }
 
@@ -846,4 +844,57 @@ void setFilenumLimit(unsigned int lim)
   rlim.rlim_cur=lim;
   if(setrlimit(RLIMIT_NOFILE, &rlim) < 0)
     unixDie("Setting number of available file descriptors");
+}
+
+#define burtlemix(a,b,c) \
+{ \
+  a -= b; a -= c; a ^= (c>>13); \
+  b -= c; b -= a; b ^= (a<<8); \
+  c -= a; c -= b; c ^= (b>>13); \
+  a -= b; a -= c; a ^= (c>>12);  \
+  b -= c; b -= a; b ^= (a<<16); \
+  c -= a; c -= b; c ^= (b>>5); \
+  a -= b; a -= c; a ^= (c>>3);  \
+  b -= c; b -= a; b ^= (a<<10); \
+  c -= a; c -= b; c ^= (b>>15); \
+}
+
+uint32_t burtle(const unsigned char* k, uint32_t length, uint32_t initval)
+{
+  uint32_t a,b,c,len;
+
+   /* Set up the internal state */
+  len = length;
+  a = b = 0x9e3779b9;  /* the golden ratio; an arbitrary value */
+  c = initval;         /* the previous hash value */
+
+  /*---------------------------------------- handle most of the key */
+  while (len >= 12) {
+    a += (k[0] +((uint32_t)k[1]<<8) +((uint32_t)k[2]<<16) +((uint32_t)k[3]<<24));
+    b += (k[4] +((uint32_t)k[5]<<8) +((uint32_t)k[6]<<16) +((uint32_t)k[7]<<24));
+    c += (k[8] +((uint32_t)k[9]<<8) +((uint32_t)k[10]<<16)+((uint32_t)k[11]<<24));
+    burtlemix(a,b,c);
+    k += 12; len -= 12;
+  }
+
+  /*------------------------------------- handle the last 11 bytes */
+  c += length;
+  switch(len) {             /* all the case statements fall through */
+  case 11: c+=((uint32_t)k[10]<<24);
+  case 10: c+=((uint32_t)k[9]<<16);
+  case 9 : c+=((uint32_t)k[8]<<8);
+    /* the first byte of c is reserved for the length */
+  case 8 : b+=((uint32_t)k[7]<<24);
+  case 7 : b+=((uint32_t)k[6]<<16);
+  case 6 : b+=((uint32_t)k[5]<<8);
+  case 5 : b+=k[4];
+  case 4 : a+=((uint32_t)k[3]<<24);
+  case 3 : a+=((uint32_t)k[2]<<16);
+  case 2 : a+=((uint32_t)k[1]<<8);
+  case 1 : a+=k[0];
+    /* case 0: nothing left to add */
+  }
+  burtlemix(a,b,c);
+  /*-------------------------------------------- report the result */
+  return c;
 }

@@ -230,14 +230,17 @@ string ZoneParserTNG::getLineOfFile()
 }
 
 // ODD: this function never fills out the prio field! rest of pdns compensates though
-bool ZoneParserTNG::get(DNSResourceRecord& rr) 
+bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment) 
 {
  retry:;
   if(!getTemplateLine() && !getLine())
     return false;
 
   boost::trim_right_if(d_line, is_any_of(" \r\n\x1a"));
-
+  if(comment)
+    comment->clear();
+  if(comment && d_line.find(';') != string::npos)
+    *comment = d_line.substr(d_line.find(';'));
   parts_t parts;
   vstringtok(parts, d_line);
 
@@ -314,8 +317,9 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr)
     if(nextpart.empty())
       break;
 
-    if(nextpart.find(';')!=string::npos)
+    if(nextpart.find(';')!=string::npos) {
       break;
+    }
 
     // cout<<"Next part: '"<<nextpart<<"'"<<endl;
     
@@ -375,7 +379,8 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr)
   case QType::MX:
     stringtok(recparts, rr.content);
     if(recparts.size()==2) {
-      recparts[1] = stripDot(toCanonic(d_zonename, recparts[1]));
+      if (recparts[1]!=".")
+        recparts[1] = stripDot(toCanonic(d_zonename, recparts[1]));
       rr.content=recparts[0]+" "+recparts[1];
     }
     break;
@@ -401,6 +406,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr)
     
   case QType::NS:
   case QType::CNAME:
+  case QType::DNAME:
   case QType::PTR:
   case QType::AFSDB:
     rr.content=stripDot(toCanonic(d_zonename, rr.content));

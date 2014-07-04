@@ -1,6 +1,6 @@
 /*
     PowerDNS Versatile Database Driven Nameserver
-    Copyright (C) 2003 - 2013  PowerDNS.COM BV
+    Copyright (C) 2003 - 2014  PowerDNS.COM BV
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License version 2 as published 
@@ -51,14 +51,15 @@ unsigned int SyncRes::s_packetcachettl;
 unsigned int SyncRes::s_packetcacheservfailttl;
 unsigned int SyncRes::s_serverdownmaxfails;
 unsigned int SyncRes::s_serverdownthrottletime;
-unsigned int SyncRes::s_queries;
-unsigned int SyncRes::s_outgoingtimeouts;
-unsigned int SyncRes::s_outqueries;
-unsigned int SyncRes::s_tcpoutqueries;
-unsigned int SyncRes::s_throttledqueries;
-unsigned int SyncRes::s_dontqueries;
-unsigned int SyncRes::s_nodelegated;
-unsigned int SyncRes::s_unreachables;
+uint64_t SyncRes::s_queries;
+uint64_t SyncRes::s_outgoingtimeouts;
+uint64_t SyncRes::s_outqueries;
+uint64_t SyncRes::s_tcpoutqueries;
+uint64_t SyncRes::s_throttledqueries;
+uint64_t SyncRes::s_dontqueries;
+uint64_t SyncRes::s_nodelegated;
+uint64_t SyncRes::s_unreachables;
+unsigned int SyncRes::s_minimumTTL;
 bool SyncRes::s_doIPv6;
 bool SyncRes::s_nopacketcache;
 
@@ -69,8 +70,6 @@ SyncRes::LogMode SyncRes::s_lm;
 
 bool SyncRes::s_noEDNSPing;
 bool SyncRes::s_noEDNS;
-bool SyncRes::s_doAdditionalProcessing;
-bool SyncRes::s_doAAAAAdditionalProcessing;
 
 SyncRes::SyncRes(const struct timeval& now) :  d_outqueries(0), d_tcpoutqueries(0), d_throttledqueries(0), d_timeouts(0), d_unreachables(0),
                                                  d_now(now),
@@ -132,8 +131,6 @@ int SyncRes::beginResolve(const string &qname, const QType &qtype, uint16_t qcla
   
   set<GetBestNSAnswer> beenthere;
   int res=doResolve(qname, qtype, ret, 0, beenthere);
-  if(!res && s_doAdditionalProcessing)
-    addCruft(qname, ret);
   return res;
 }
 
@@ -936,7 +933,8 @@ int SyncRes::doResolveAt(set<string, CIStringCompare> nameservers, string auth, 
             
             resolveret=asyncresolveWrapper(*remoteIP, qname,  qtype.getCode(), 
                                            doTCP, sendRDQuery, &d_now, &lwr);    // <- we go out on the wire!
-            if(resolveret != 1) {
+              
+	    if(resolveret != 1) {
               if(resolveret==0) {
                 LOG(prefix<<qname<<": timeout resolving "<< (doTCP ? "over TCP" : "")<<endl);
                 d_timeouts++;
@@ -950,13 +948,12 @@ int SyncRes::doResolveAt(set<string, CIStringCompare> nameservers, string auth, 
                 s_unreachables++; d_unreachables++;
                 LOG(prefix<<qname<<": error resolving"<< (doTCP ? " over TCP" : "") <<", possible error: "<<strerror(errno)<< endl);
               }
-              
+	      
               if(resolveret!=-2) { // don't account for resource limits, they are our own fault
-                {
-                  
-                  t_sstorage->nsSpeeds[*tns].submit(*remoteIP, 1000000, &d_now); // 1 sec
-                }
-                if (s_serverdownmaxfails > 0 && t_sstorage->fails.incr(*remoteIP) >= s_serverdownmaxfails) {
+		t_sstorage->nsSpeeds[*tns].submit(*remoteIP, 1000000, &d_now); // 1 sec
+                
+		// code below makes sure we don't filter COM or the root
+                if (s_serverdownmaxfails > 0 && (auth.find('.')+1 != auth.size()) && t_sstorage->fails.incr(*remoteIP) >= s_serverdownmaxfails) {
                   LOG(prefix<<qname<<": Max fails reached resolving on "<< remoteIP->toString() <<". Going full throttle for 1 minute" <<endl);
                   t_sstorage->throttle.throttle(d_now.tv_sec, make_tuple(*remoteIP, "", 0), s_serverdownthrottletime, 10000); // mark server as down
                 } else if(resolveret==-1)
@@ -1005,6 +1002,12 @@ int SyncRes::doResolveAt(set<string, CIStringCompare> nameservers, string auth, 
         //        cout<<"msec: "<<lwr.d_usec/1000.0<<", "<<g_avgLatency/1000.0<<'\n';
 
         t_sstorage->nsSpeeds[*tns].submit(*remoteIP, lwr.d_usec, &d_now);
+      }
+
+      if(s_minimumTTL) {
+	for(LWResult::res_t::iterator i=lwr.d_result.begin();i != lwr.d_result.end();++i) {
+	  i->ttl = max(i->ttl, s_minimumTTL);
+	}
       }
 
       typedef map<pair<string, QType>, set<DNSResourceRecord>, TCacheComp > tcache_t;
@@ -1180,57 +1183,6 @@ int SyncRes::doResolveAt(set<string, CIStringCompare> nameservers, string auth, 
     }
   }
   return -1;
-}
-
-static bool uniqueComp(const DNSResourceRecord& a, const DNSResourceRecord& b)
-{
-  return(a.qtype==b.qtype && a.qname==b.qname && a.content==b.content);
-}
-
-void SyncRes::addCruft(const string &qname, vector<DNSResourceRecord>& ret)
-{
-  for(vector<DNSResourceRecord>::const_iterator k=ret.begin();k!=ret.end();++k)  // don't add stuff to an NXDOMAIN!
-    if(k->d_place==DNSResourceRecord::AUTHORITY && k->qtype==QType(QType::SOA))
-      return;
-
-  //  LOG(qname<<": Adding best authority records from cache"<<endl);
-  // addAuthorityRecords(qname,ret,0);
-  // LOG(qname<<": Done adding best authority records."<<endl);
-
-  LOG(d_prefix<<qname<<": Starting additional processing"<<endl);
-  vector<DNSResourceRecord> addit;
-
-  for(vector<DNSResourceRecord>::const_iterator k=ret.begin();k!=ret.end();++k) 
-    if( (k->d_place==DNSResourceRecord::ANSWER && (k->qtype==QType(QType::MX) || k->qtype==QType(QType::SRV)))  || 
-       ((k->d_place==DNSResourceRecord::AUTHORITY || k->d_place==DNSResourceRecord::ANSWER) && k->qtype==QType(QType::NS))) {
-      LOG(d_prefix<<qname<<": record '"<<k->content<<"|"<<k->qtype.getName()<<"' needs IP for additional processing"<<endl);
-      set<GetBestNSAnswer> beenthere;
-      vector<pair<string::size_type, string::size_type> > fields;
-      vstringtok(fields, k->content, " ");
-      string host;
-      if(k->qtype==QType(QType::MX) && fields.size()==2)
-        host=string(k->content.c_str() + fields[1].first, fields[1].second - fields[1].first);
-      else if(k->qtype==QType(QType::NS))
-        host=k->content;
-      else if(k->qtype==QType(QType::SRV) && fields.size()==4)
-        host=string(k->content.c_str() + fields[3].first, fields[3].second - fields[3].first);
-      else 
-        continue;
-      // we used to do additional processing here.. no more
-      // doResolve(host, QType(QType::A), addit, 1, beenthere);
-    }
-  
-  if(!addit.empty()) {
-    sort(addit.begin(), addit.end());
-    addit.erase(unique(addit.begin(), addit.end(), uniqueComp), addit.end());
-    for(vector<DNSResourceRecord>::iterator k=addit.begin();k!=addit.end();++k) {
-      if(k->qtype.getCode()==QType::A || k->qtype.getCode()==QType::AAAA) {
-        k->d_place=DNSResourceRecord::ADDITIONAL;
-        ret.push_back(*k);
-      }
-    }
-  }
-  LOG(d_prefix<<qname<<": Done with additional processing"<<endl);
 }
 
 void SyncRes::addAuthorityRecords(const string& qname, vector<DNSResourceRecord>& ret, int depth)

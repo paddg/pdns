@@ -4,9 +4,9 @@ case $context in
 			--no-shuffle --launch=bind --bind-config=./named.conf \
 			--send-root-referral \
 			--allow-2136-from=127.0.0.0/8 --experimental-rfc2136=yes \
-			--cache-ttl=$cachettl --no-config \
-			--bind-ignore-broken-records=yes &
-		skipreasons="nodnssec nodyndns"
+			--cache-ttl=$cachettl --no-config --experimental-dname-processing \
+			--bind-ignore-broken-records=yes --disable-axfr-rectify=yes  &
+		skipreasons="nodnssec nodyndns nometa"
 		bindwait
 		;;
 
@@ -51,8 +51,8 @@ case $context in
 			--bind-dnssec-db=./dnssec.sqlite3 \
 			--send-root-referral \
 			--allow-2136-from=127.0.0.0/8 --experimental-rfc2136=yes --direct-dnskey=yes \
-			--cache-ttl=$cachettl --no-config \
-			--bind-ignore-broken-records=yes $lua_prequery &
+			--cache-ttl=$cachettl --no-config --experimental-dname-processing \
+			--bind-ignore-broken-records=yes --disable-axfr-rectify=yes $lua_prequery &
 		bindwait
 		;;
 

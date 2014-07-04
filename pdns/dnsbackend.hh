@@ -134,9 +134,30 @@ public:
   }
 
   // the DNSSEC related (getDomainMetadata has broader uses too)
+  bool isDnssecDomainMetadata (const string& name) {
+    return (name == "PRESIGNED" || name == "NSEC3PARAM" || name == "NSEC3NARROW");
+  }
   virtual bool getAllDomainMetadata(const string& name, std::map<std::string, std::vector<std::string> >& meta) { return false; };
   virtual bool getDomainMetadata(const string& name, const std::string& kind, std::vector<std::string>& meta) { return false; }
+  virtual bool getDomainMetadataOne(const string& name, const std::string& kind, std::string& value)
+  {
+    std::vector<std::string> meta;
+    if (getDomainMetadata(name, kind, meta)) {
+      if(!meta.empty()) {
+        value = *meta.begin();
+        return true;
+      }
+    }
+    return false;
+  }
+
   virtual bool setDomainMetadata(const string& name, const std::string& kind, const std::vector<std::string>& meta) {return false;}
+  virtual bool setDomainMetadataOne(const string& name, const std::string& kind, const std::string& value)
+  {
+    const std::vector<std::string> meta(1, value);
+    return setDomainMetadata(name, kind, meta);
+  }
+
 
   virtual void getAllDomains(vector<DomainInfo> *domains, bool include_disabled=false) { }
 
@@ -356,14 +377,14 @@ private:
 class DNSReversedBackend : public DNSBackend {
     public:
         /* Given rev_zone (the reversed name of the zone we are looking for the
-         * SOA record for), return the equivelent of
+         * SOA record for), return the equivalent of
          *     SELECT name
          *     FROM soa_records
          *     WHERE name <= rev_zone
          *     ORDER BY name DESC
          *
          * ie we want either an exact hit on the record, or the immediately
-         * preceeding record when sorted lexographically.
+         * preceding record when sorted lexographically.
          *
          * Return true if something has been found, false if not
          */

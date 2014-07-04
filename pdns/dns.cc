@@ -101,7 +101,7 @@ bool dnspacketLessThan(const std::string& a, const std::string& b)
     int result=0;
     unsigned int n;
     for(n = 0; n < aLabelLen && n < bLabelLen; ++n) 
-      if((result = aSafe[aPos + n] - bSafe[bPos +n]))
+      if((result = aSafe[aPos + n] - bSafe[bPos +n]))   // XXX this should perhaps be dns_tolower
         break;
     // cerr<<"Done loop, result="<<result<<", n = "<<n<<", aLabelLen="<<aLabelLen<<", bLabelLen="<<bLabelLen<<endl;
     if(result < 0)
@@ -128,6 +128,25 @@ bool dnspacketLessThan(const std::string& a, const std::string& b)
   return boost::tie(aQtype, aQclass) < boost::tie(bQtype, bQclass);
 }
 
+// goal is to hash based purely on the question name, and turn error into 'default'
+uint32_t hashQuestion(const char* packet, uint16_t len, uint32_t init)
+{
+  if(len < 12) 
+    return init;
+  
+  uint32_t ret=init;
+  const unsigned char* end = (const unsigned char*)packet+len;
+  const unsigned char* pos = (const unsigned char*)packet+12;
+
+  unsigned char labellen;
+  while((labellen=*pos++) && pos < end) { 
+    if(pos + labellen + 1 > end) // include length field  in hash
+      return 0;
+    ret=burtle(pos, labellen+1, ret);
+    pos += labellen;
+  }
+  return ret;
+}
 
 string questionExpand(const char* packet, uint16_t len, uint16_t& type)
 {

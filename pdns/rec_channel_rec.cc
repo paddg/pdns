@@ -246,6 +246,16 @@ string doWipeCache(T begin, T end)
   return "wiped "+lexical_cast<string>(count)+" records, "+lexical_cast<string>(countNeg)+" negative records\n";
 }
 
+template<typename T>
+string setMinimumTTL(T begin, T end)
+{
+  if(end-begin != 1) 
+    return "Need to supply new minimum TTL number\n";
+  SyncRes::s_minimumTTL = atoi(begin->c_str());
+  return "New minimum TTL: " + lexical_cast<string>(SyncRes::s_minimumTTL) + "\n";
+}
+
+
 static uint64_t getSysTimeMsec()
 {
   struct rusage ru;
@@ -358,6 +368,12 @@ uint64_t doGetCacheSize()
 {
   return broadcastAccFunction<uint64_t>(pleaseGetCacheSize);
 }
+
+uint64_t doGetAvgLatencyUsec()
+{
+  return (uint64_t) g_stats.avgLatencyUsec;
+}
+
 
 uint64_t doGetCacheBytes()
 {
@@ -477,7 +493,7 @@ RecursorControlParser::RecursorControlParser()
   addGetStat("answers100-1000", &g_stats.answers100_1000);
   addGetStat("answers-slow", &g_stats.answersSlow);
 
-  addGetStat("qa-latency", &g_stats.avgLatencyUsec);
+  addGetStat("qa-latency", doGetAvgLatencyUsec);
   addGetStat("unexpected-packets", &g_stats.unexpectedCount);
   addGetStat("case-mismatches", &g_stats.caseMismatchCount);
   addGetStat("spoof-prevents", &g_stats.spoofCount);
@@ -486,6 +502,7 @@ RecursorControlParser::RecursorControlParser()
 
   addGetStat("resource-limits", &g_stats.resourceLimits);
   addGetStat("over-capacity-drops", &g_stats.overCapacityDrops);
+  addGetStat("policy-drops", &g_stats.policyDrops);
   addGetStat("no-packet-error", &g_stats.noPacketError);
   addGetStat("dlg-only-drops", &SyncRes::s_nodelegated);
   addGetStat("max-mthread-stack", &g_stats.maxMThreadStackUsage);
@@ -622,6 +639,7 @@ string RecursorControlParser::getAnswer(const string& question, RecursorControlP
 "reload-acls                      reload ACLS\n"
 "reload-lua-script [filename]     (re)load Lua script\n"
 "reload-zones                     reload all auth and forward zones\n"
+"set-minimum-ttl value            set mininum-ttl-override\n"
 "trace-regex regex                emit resolution trace for matching queries\n"
 "top-remotes                      show top remotes\n"
 "unload-lua-script                unload Lua script\n"
@@ -700,6 +718,10 @@ string RecursorControlParser::getAnswer(const string& question, RecursorControlP
 
   if(cmd=="reload-zones") {
     return reloadAuthAndForwards();
+  }
+
+  if(cmd=="set-minimum-ttl") {
+    return setMinimumTTL(begin, end);
   }
   
   if(cmd=="get-qtypelist") {

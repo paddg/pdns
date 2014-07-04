@@ -26,7 +26,6 @@ bool g_anyToTcp;
 bool g_addSuperfluousNSEC3;
 typedef Distributor<DNSPacket,DNSPacket,PacketHandler> DNSDistributor;
 
-
 ArgvMap theArg;
 StatBag S;  //!< Statistics are gathered across PDNS via the StatBag class S
 PacketCache PC; //!< This is the main PacketCache, shared across all threads
@@ -66,6 +65,7 @@ void declareArguments()
   ::arg().set("retrieval-threads", "Number of AXFR-retrieval threads for slave operation")="2";
   ::arg().setSwitch("experimental-json-interface", "If the webserver should serve JSON data")="no";
   ::arg().setSwitch("experimental-api-readonly", "If the JSON API should disallow data modification")="no";
+  ::arg().setSwitch("experimental-dname-processing", "If we should support DNAME records")="no";
 
   ::arg().setCmd("help","Provide a helpful message");
   ::arg().setCmd("version","Output version and compilation date");
@@ -107,13 +107,13 @@ void declareArguments()
   
   ::arg().setSwitch("slave","Act as a slave")="no";
   ::arg().setSwitch("master","Act as a master")="no";
+  ::arg().setSwitch("disable-axfr-rectify","Disable the rectify step during an outgoing AXFR. Only required for regression testing.")="no";
   ::arg().setSwitch("guardian","Run within a guardian process")="no";
   ::arg().setSwitch("send-root-referral","Send out old-fashioned root-referral instead of ServFail in case of no authority")="no";
   ::arg().setSwitch("prevent-self-notification","Don't send notifications to what we think is ourself")="yes";
   ::arg().setSwitch("webserver","Start a webserver for monitoring")="no"; 
   ::arg().setSwitch("webserver-print-arguments","If the webserver should print arguments")="no"; 
   ::arg().setSwitch("edns-subnet-processing","If we should act on EDNS Subnet options")="no"; 
-  ::arg().set("edns-subnet-option-numbers","Comma separated list of whitelisted non-standard EDNS subnet option codes (8 is always included)")="20730";
   ::arg().setSwitch("any-to-tcp","Answer ANY queries with tc=1, shunting to TCP")="no"; 
   ::arg().set("webserver-address","IP Address of webserver to listen on")="127.0.0.1";
   ::arg().set("webserver-port","Port of webserver to listen on")="8081";
@@ -122,7 +122,11 @@ void declareArguments()
   ::arg().setSwitch("out-of-zone-additional-processing","Do out of zone additional processing")="yes";
   ::arg().setSwitch("do-ipv6-additional-processing", "Do AAAA additional processing")="yes";
   ::arg().setSwitch("query-logging","Hint backends that queries should be logged")="no";
-  
+
+  ::arg().set("carbon-ourname", "If set, overrides our reported hostname for carbon stats")="";
+  ::arg().set("carbon-server", "If set, send metrics in carbon (graphite) format to this server")="";
+  ::arg().set("carbon-interval", "Number of seconds between carbon (graphite) updates")="30";
+
   ::arg().set("cache-ttl","Seconds to store packets in the PacketCache")="20";
   ::arg().set("recursive-cache-ttl","Seconds to store packets for recursive queries in the PacketCache")="10";
   ::arg().set("negquery-cache-ttl","Seconds to store negative query results in the QueryCache")="60";
@@ -247,6 +251,7 @@ void *qthread(void *number)
 
   int diff;
   bool logDNSQueries = ::arg().mustDo("log-dns-queries");
+  bool doRecursion = ::arg().mustDo("recursor");
   bool skipfirst=true;
   unsigned int maintcount = 0;
   UDPNameserver *NS = N;
@@ -265,14 +270,13 @@ void *qthread(void *number)
       numreceived++;
 
     if(number==0) { // only run on main thread
-      if(!((maintcount++)%250)) { // maintenance tasks
+      if(!((maintcount++)%250)) { // maintenance tasks - this can conceivably run infrequently
         S.set("latency",(int)avg_latency);
         int qcount, acount;
-        distributor->getQueueSizes(qcount, acount);
+        distributor->getQueueSizes(qcount, acount);  // this does locking and other things, so don't get smart
         S.set("qsize-q",qcount);
       }
     }
-
 
     if(!(P=NS->receive(&question))) { // receive a packet         inline
       continue;                    // packet was broken, try again
@@ -301,23 +305,29 @@ void *qthread(void *number)
             "', do = " <<P->d_dnssecOk <<", bufsize = "<< P->getMaxReplyLen()<<": ";
     }
 
+    if((P->d.opcode != Opcode::Notify && P->d.opcode != Opcode::Update) && P->couldBeCached()) {
+      bool haveSomething = false;
+      if (doRecursion && P->d.rd && DP->recurseFor(P))
+        haveSomething=PC.get(P, &cached, true); // does the PacketCache recognize this ruestion (recursive)?
+      if (!haveSomething)
+        haveSomething=PC.get(P, &cached, false); // does the PacketCache recognize this question?
+      if (haveSomething) {
+        if(logDNSQueries)
+          L<<"packetcache HIT"<<endl;
+        cached.setRemote(&P->d_remote);  // inlined
+        cached.setSocket(P->getSocket());                               // inlined
+        cached.d_anyLocal = P->d_anyLocal;
+        cached.setMaxReplyLen(P->getMaxReplyLen());
+        cached.d.rd=P->d.rd; // copy in recursion desired bit
+        cached.d.id=P->d.id;
+        cached.commitD(); // commit d to the packet                        inlined
 
-    if((P->d.opcode != Opcode::Notify && P->d.opcode != Opcode::Update) && P->couldBeCached() && PC.get(P, &cached)) { // short circuit - does the PacketCache recognize this question?
-      if(logDNSQueries)
-        L<<"packetcache HIT"<<endl;
-      cached.setRemote(&P->d_remote);  // inlined
-      cached.setSocket(P->getSocket());                               // inlined
-      cached.d_anyLocal = P->d_anyLocal;
-      cached.setMaxReplyLen(P->getMaxReplyLen());
-      cached.d.rd=P->d.rd; // copy in recursion desired bit 
-      cached.d.id=P->d.id;
-      cached.commitD(); // commit d to the packet                        inlined
+        NS->send(&cached);   // answer it then                              inlined
+        diff=P->d_dt.udiff();
+        avg_latency=(int)(0.999*avg_latency+0.001*diff); // 'EWMA'
 
-      NS->send(&cached);   // answer it then                              inlined
-      diff=P->d_dt.udiff();                                                    
-      avg_latency=(int)(0.999*avg_latency+0.001*diff); // 'EWMA'
-      
-      continue;
+        continue;
+      }
     }
     
     if(distributor->isOverloaded()) {
@@ -347,15 +357,9 @@ void mainthread()
    
    g_anyToTcp = ::arg().mustDo("any-to-tcp");
    g_addSuperfluousNSEC3 = ::arg().mustDo("add-superfluous-nsec3-for-old-bind");
+
    DNSPacket::s_udpTruncationThreshold = std::max(512, ::arg().asNum("udp-truncation-threshold"));
    DNSPacket::s_doEDNSSubnetProcessing = ::arg().mustDo("edns-subnet-processing");
-   {
-      std::vector<std::string> codes;
-      stringtok(codes, ::arg()["edns-subnet-option-numbers"], "\t ,");
-      BOOST_FOREACH(std::string &code, codes) {
-         DNSPacket::s_ednssubnetcodes.push_back(boost::lexical_cast<int>(code));
-      }
-   }
    if(!::arg()["chroot"].empty()) {  
      if(::arg().mustDo("master") || ::arg().mustDo("slave"))
         gethostbyname("a.root-servers.net"); // this forces all lookup libraries to be loaded
@@ -391,7 +395,8 @@ void mainthread()
 
   if(TN)
     TN->go(); // tcp nameserver launch
-    
+
+  pthread_create(&qtid,0,carbonDumpThread, 0); // runs even w/o carbon, might change @ runtime    
   //  fork(); (this worked :-))
   unsigned int max_rthreads= ::arg().asNum("receiver-threads");
   for(unsigned int n=0; n < max_rthreads; ++n)

@@ -1,6 +1,6 @@
 /*
     PowerDNS Versatile Database Driven Nameserver
-    Copyright (C) 2002-2012  PowerDNS.COM BV
+    Copyright (C) 2002-2014  PowerDNS.COM BV
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License version 2 as 
@@ -62,6 +62,7 @@ PacketHandler::PacketHandler():B(s_programname)
 {
   ++s_count;
   d_doFancyRecords = (::arg()["fancy-records"]!="no");
+  d_doDNAME=::arg().mustDo("experimental-dname-processing");
   d_doRecursion= ::arg().mustDo("recursor");
   d_logDNSDetails= ::arg().mustDo("log-dns-details");
   d_doIPv6AdditionalProcessing = ::arg().mustDo("do-ipv6-additional-processing");
@@ -330,6 +331,37 @@ vector<DNSResourceRecord> PacketHandler::getBestReferralNS(DNSPacket *p, SOAData
   } while( chopOff( subdomain ) );   // 'www.powerdns.org' -> 'powerdns.org' -> 'org' -> ''
   return ret;
 }
+
+vector<DNSResourceRecord> PacketHandler::getBestDNAMESynth(DNSPacket *p, SOAData& sd, string &target)
+{
+  vector<DNSResourceRecord> ret;
+  DNSResourceRecord rr;
+  string prefix;
+  string subdomain(target);
+  do {
+    DLOG(L<<"Attempting DNAME lookup for "<<subdomain<<", sd.qname="<<sd.qname<<endl);
+
+    B.lookup(QType(QType::DNAME), subdomain, p, sd.domain_id);
+    while(B.get(rr)) {
+      ret.push_back(rr);  // put in the original
+      rr.qtype = QType::CNAME;
+      rr.qname = prefix + rr.qname;
+      rr.content = prefix + rr.content;
+      target= rr.content;
+      ret.push_back(rr); 
+    }
+    if(!ret.empty())
+      return ret;
+    string::size_type pos = subdomain.find('.');
+    if(pos != string::npos)
+      prefix+= subdomain.substr(0, pos+1);
+    if(subdomain == sd.qname) // stop at SOA
+      break;
+
+  } while( chopOff( subdomain ) );   // 'www.powerdns.org' -> 'powerdns.org' -> 'org' -> ''
+  return ret;
+}
+
 
 // Return best matching wildcard or next closer name
 bool PacketHandler::getBestWildcard(DNSPacket *p, SOAData& sd, const string &target, string &wildcard, vector<DNSResourceRecord>* ret)
@@ -848,138 +880,6 @@ DNSPacket *PacketHandler::question(DNSPacket *p)
   return ret;
 }
 
-void PacketHandler::synthesiseRRSIGs(DNSPacket* p, DNSPacket* r)
-{
-  DLOG(L<<"Need to synthesise the RRSIGs if someone asked for them explicitly"<<endl);
-  typedef map<uint16_t, vector<shared_ptr<DNSRecordContent> > > records_t;
-  typedef map<uint16_t, uint32_t> ttls_t;
-  records_t records;
-  ttls_t ttls;
-
-  NSECRecordContent nrc;
-  NSEC3RecordContent n3rc;
-  nrc.d_set.insert(QType::RRSIG);
-
-  DNSResourceRecord rr;
-
-  SOAData sd;
-  sd.db=(DNSBackend *)-1; // force uncached answer
-  B.getAuth(p, &sd, p->qdomain, 0);
-
-  bool narrow;
-  NSEC3PARAMRecordContent ns3pr;
-  bool doNSEC3= d_dk.getNSEC3PARAM(sd.qname, &ns3pr, &narrow);
-
-  B.lookup(QType(QType::ANY), p->qdomain, p);
-
-  bool haveone=false;
-  while(B.get(rr)) {
-    haveone=true;
-    if(!((rr.auth && rr.qtype.getCode()) || (!(doNSEC3 && ns3pr.d_flags) && rr.qtype.getCode() == QType::NS)))
-      continue;
-
-    // make sure all fields are present in the SOA content
-    if(rr.qtype.getCode() == QType::SOA) {
-      rr.content = serializeSOAData(sd);
-    }
- 
-    // this deals with the 'prio' mismatch!
-    if(rr.qtype.getCode()==QType::MX || rr.qtype.getCode() == QType::SRV) {  
-      rr.content = lexical_cast<string>(rr.priority) + " " + rr.content;
-    }
-    
-    // fix direct DNSKEY ttl
-    if(::arg().mustDo("direct-dnskey") && rr.qtype.getCode() == QType::DNSKEY) {
-      rr.ttl = sd.default_ttl;
-    }
-
-    if(!rr.content.empty() && rr.qtype.getCode()==QType::TXT && rr.content[0]!='"') {
-      rr.content="\""+rr.content+"\"";
-    }
-    if(rr.content.empty())  // empty contents confuse the MOADNS setup
-      rr.content=".";
-    shared_ptr<DNSRecordContent> drc(DNSRecordContent::mastermake(rr.qtype.getCode(), 1, rr.content)); 
-    
-    records[rr.qtype.getCode()].push_back(drc);
-    ttls[rr.qtype.getCode()]=rr.ttl;
-    nrc.d_set.insert(rr.qtype.getCode());
-  }
-
-  if(records.empty()) {
-    if (haveone)
-      makeNOError(p, r, p->qdomain, "", sd, 0);
-    return;
-  }
-
-  if(pdns_iequals(p->qdomain, sd.qname)) { // Add DNSKEYs at apex
-    DNSSECPrivateKey dpk;
-
-    DNSSECKeeper::keyset_t keyset = d_dk.getKeys(p->qdomain);
-    BOOST_FOREACH(DNSSECKeeper::keyset_t::value_type value, keyset) {
-
-      records[QType::DNSKEY].push_back(shared_ptr<DNSRecordContent>(DNSRecordContent::mastermake(QType::DNSKEY, 1, value.first.getDNSKEY().getZoneRepresentation())));
-      ttls[QType::DNSKEY]=sd.default_ttl;
-      nrc.d_set.insert(QType::DNSKEY);
-    }
-  }
-
-  string before,after;
-  string unhashed(p->qdomain);
-
-  if(doNSEC3) {
-    // now get the NSEC3 and NSEC3PARAM
-    string hashed=hashQNameWithSalt(ns3pr.d_iterations, ns3pr.d_salt, unhashed);
-    getNSEC3Hashes(narrow, sd.db, sd.domain_id,  hashed, false, unhashed, before, after);
-    unhashed=dotConcat(toBase32Hex(before), sd.qname);
-
-    n3rc.d_set=nrc.d_set; // Copy d_set from NSEC
-    n3rc.d_algorithm=ns3pr.d_algorithm;
-    n3rc.d_flags=ns3pr.d_flags;
-    n3rc.d_iterations=ns3pr.d_iterations;
-    n3rc.d_salt=ns3pr.d_salt;
-    n3rc.d_nexthash=after;
-
-    if(pdns_iequals(p->qdomain, sd.qname)) {
-      ns3pr.d_flags = 0; // the NSEC3PARAM 'flag' is defined to always be zero in RFC5155.
-
-      records[QType::NSEC3PARAM].push_back(shared_ptr<DNSRecordContent>(DNSRecordContent::mastermake(QType::NSEC3PARAM, 1, ns3pr.getZoneRepresentation())));
-      ttls[QType::NSEC3PARAM]=sd.default_ttl;
-      n3rc.d_set.insert(QType::NSEC3PARAM);
-    }
-
-    // ok, the NSEC3PARAM is in..
-  }
-  else {
-    // now get the NSEC too (since we must sign it!)
-    sd.db->getBeforeAndAfterNames(sd.domain_id, sd.qname, p->qdomain, before, after);
-
-    nrc.d_set.insert(QType::NSEC);
-    nrc.d_next=after;
-
-    records[QType::NSEC].push_back(shared_ptr<DNSRecordContent>(DNSRecordContent::mastermake(QType::NSEC, 1, nrc.getZoneRepresentation())));
-    ttls[QType::NSEC]=sd.default_ttl;
-
-    // ok, the NSEC is in..
-  }
-  DLOG(L<<"Have "<<records.size()<<" rrsets to sign"<<endl);
-
-  rr.auth = 0; // please don't sign this!
-  rr.d_place = DNSResourceRecord::ANSWER;
-  rr.qtype = QType::RRSIG;
-
-  vector<DNSResourceRecord> rrsigs;
-
-  BOOST_FOREACH(records_t::value_type& iter, records) {
-    rr.qname=(doNSEC3 && iter.first == QType::NSEC3) ? unhashed : p->qdomain;
-    rr.ttl=ttls[iter.first];
-
-    addSignature(d_dk, B, sd.qname, rr.qname, rr.qname, iter.first, rr.ttl, DNSPacketWriter::ANSWER, iter.second, rrsigs, rr.ttl);
-  }
-
-  BOOST_FOREACH(DNSResourceRecord& rr, rrsigs)
-    r->addRecord(rr);
-}
-
 void PacketHandler::makeNXDomain(DNSPacket* p, DNSPacket* r, const std::string& target, const std::string& wildcard, SOAData& sd)
 {
   DNSResourceRecord rr;
@@ -1070,6 +970,21 @@ void PacketHandler::completeANYRecords(DNSPacket *p, DNSPacket*r, SOAData& sd, c
   }
 }
 
+bool PacketHandler::tryDNAME(DNSPacket *p, DNSPacket*r, SOAData& sd, string &target)
+{
+  if(!d_doDNAME)
+    return false;
+  DLOG(L<<Logger::Warning<<"Let's try DNAME.."<<endl);
+  vector<DNSResourceRecord> rrset = getBestDNAMESynth(p, sd, target);
+  if(!rrset.empty()) {
+    BOOST_FOREACH(DNSResourceRecord& rr, rrset) {
+      rr.d_place = DNSResourceRecord::ANSWER;
+      r->addRecord(rr);
+    }
+    return true;
+  }
+  return false;
+}
 bool PacketHandler::tryWildcard(DNSPacket *p, DNSPacket*r, SOAData& sd, string &target, string &wildcard, bool& retargeted, bool& nodata)
 {
   retargeted = nodata = false;
@@ -1199,7 +1114,6 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
       return r;
     }
 
-
     string target=p->qdomain;
 
     // catch chaos qclass requests
@@ -1210,14 +1124,14 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
         return r;
     }
 
-    // we only know about qclass IN (and ANY), send NotImp for everthing else.
+    // we only know about qclass IN (and ANY), send NotImp for everything else.
     if(p->qclass != QClass::IN && p->qclass!=QClass::ANY) {
       r->setRcode(RCode::NotImp);
       return r;
     }
 
-    // send TC for udp ANY or RRSIG query if any-to-tcp is enabled.
-    if(g_anyToTcp && !p->d_tcp && ((p->qtype.getCode() == QType::ANY || p->qtype.getCode() == QType::RRSIG))) {
+    // send TC for udp ANY query if any-to-tcp is enabled.
+    if(p->qtype.getCode() == QType::ANY && !p->d_tcp && g_anyToTcp) {
       r->d.tc = 1;
       r->commitD();
       return r;
@@ -1298,8 +1212,9 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
     }
 
     // this TRUMPS a cname!
-    if(p->qtype.getCode() == QType::RRSIG && d_dk.isSecuredZone(sd.qname)) {
-      synthesiseRRSIGs(p, r);
+    if(p->qtype.getCode() == QType::RRSIG) {
+      L<<Logger::Info<<"Direct RRSIG query for "<<target<<" from "<<p->getRemote()<<endl;
+      r->setRcode(RCode::NotImp);
       goto sendit;
     }
 
@@ -1312,7 +1227,7 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
     // see what we get..
     B.lookup(QType(QType::ANY), target, p, sd.domain_id);
     rrset.clear();
-    weDone = weRedirected = weHaveUnauth = 0;
+    weDone = weRedirected = weHaveUnauth =  false;
     
     while(B.get(rr)) {
       if (p->qtype.getCode() == QType::ANY) {
@@ -1350,6 +1265,7 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
         rrset.push_back(rr);
     }
 
+
     DLOG(L<<"After first ANY query for '"<<target<<"', id="<<sd.domain_id<<": weDone="<<weDone<<", weHaveUnauth="<<weHaveUnauth<<", weRedirected="<<weRedirected<<endl);
     if(p->qtype.getCode() == QType::DS && weHaveUnauth &&  !weDone && !weRedirected && d_dk.isSecuredZone(sd.qname)) {
       DLOG(L<<"Q for DS of a name for which we do have NS, but for which we don't have on a zone with DNSSEC need to provide an AUTH answer that proves we don't"<<endl);
@@ -1369,6 +1285,7 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
         }
       }
 
+      
       DLOG(L<<Logger::Warning<<"Found nothing in the by-name ANY, but let's try wildcards.."<<endl);
       bool wereRetargeted(false), nodata(false);
       string wildcard;
@@ -1381,6 +1298,10 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
           makeNOError(p, r, target, wildcard, sd, 2);
 
         goto sendit;
+      }
+      else if(tryDNAME(p, r, sd, target)) {
+	retargetcount++;
+	goto retargeted;
       }
       else
       {        
@@ -1454,7 +1375,7 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
       
     r->wrapup(); // needed for inserting in cache
     if(!noCache)
-      PC.insert(p, r, r->getMinTTL()); // in the packet cache
+      PC.insert(p, r, false, r->getMinTTL()); // in the packet cache
   }
   catch(DBException &e) {
     L<<Logger::Error<<"Backend reported condition which prevented lookup ("+e.reason+") sending out servfail"<<endl;

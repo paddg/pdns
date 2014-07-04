@@ -77,6 +77,7 @@ __thread unsigned int t_id;
 unsigned int g_maxTCPPerClient;
 unsigned int g_prefetchRatio;
 unsigned int g_networkTimeoutMsec;
+uint64_t g_latencyStatSize;
 bool g_logCommonErrors;
 bool g_anyToTcp;
 uint16_t g_udpTruncationThreshold;
@@ -549,10 +550,9 @@ void startDoResolve(void *p)
     if(!dc->d_mdp.d_header.rd)
       sr.setCacheOnly();
 
-
     // if there is a RecursorLua active, and it 'took' the query in preResolve, we don't launch beginResolve
     if(!t_pdl->get() || !(*t_pdl)->preresolve(dc->d_remote, g_listenSocketsAddresses[dc->d_socket], dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), ret, res, &variableAnswer)) {
-       res = sr.beginResolve(dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), dc->d_mdp.d_qclass, ret);
+      res = sr.beginResolve(dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), dc->d_mdp.d_qclass, ret);
 
       if(t_pdl->get()) {
         if(res == RCode::NoError) {
@@ -571,6 +571,7 @@ void startDoResolve(void *p)
     }
     
     if(res == RecursorBehaviour::DROP) {
+      g_stats.policyDrops++;
       delete dc;
       dc=0;
       return;
@@ -697,8 +698,10 @@ void startDoResolve(void *p)
       g_stats.answersSlow++;
 
     uint64_t newLat=(uint64_t)(spent*1000000);
-    if(newLat < 1000000)  // outliers of several minutes exist..
-      g_stats.avgLatencyUsec=(uint64_t)((1-0.0001)*g_stats.avgLatencyUsec + 0.0001*newLat);
+
+    newLat = min(newLat,(uint64_t)(g_networkTimeoutMsec*1000)); // outliers of several minutes exist..
+    g_stats.avgLatencyUsec=(1-1.0/g_latencyStatSize)*g_stats.avgLatencyUsec + (float)newLat/g_latencyStatSize;
+    // no worries, we do this for packet cache hits elsewhere
 
     if(prefetch.size() && !variableAnswer) {
       for(vector<DNSResourceRecord>::const_iterator i=prefetch.begin(); i!=prefetch.end(); ++i) {
@@ -893,7 +896,7 @@ string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fr
     if(!SyncRes::s_nopacketcache && t_packetCache->getResponsePacket(question, g_now.tv_sec, &response, &age, g_prefetchRatio)) {
       if(!g_quiet)
         L<<Logger::Error<<t_id<< " question answered from packet cache from "<<fromaddr.toString()<<endl;
-
+      
       g_stats.packetCacheHits++;
       SyncRes::s_queries++;
       ageDNSPacket(response, age);
@@ -903,7 +906,7 @@ string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fr
         memcpy(&dh, response.c_str(), sizeof(dh));
         updateRcodeStats(dh.rcode);
       }
-      g_stats.avgLatencyUsec=(uint64_t)((1-0.0001)*g_stats.avgLatencyUsec + 0); // we assume 0 usec
+      g_stats.avgLatencyUsec=(1-1.0/g_latencyStatSize)*g_stats.avgLatencyUsec + 0.0; // we assume 0 usec
       return 0;
     }
   } 
@@ -966,7 +969,7 @@ void handleNewUDPQuestion(int fd, FDMultiplexer::funcparam_t& var)
       else {
         string question(data, len);
         if(g_weDistributeQueries)
-          distributeAsyncFunction(boost::bind(doProcessUDPQuestion, question, fromaddr, fd));
+          distributeAsyncFunction(question, boost::bind(doProcessUDPQuestion, question, fromaddr, fd));
         else
           doProcessUDPQuestion(question, fromaddr, fd);
       }
@@ -1048,8 +1051,6 @@ void makeTCPServerSockets()
       L<<Logger::Error<<"Listening for TCP queries on ["<< sin.toString() <<"]:"<<st.port<<endl;
   }
 }
-
-
 
 void makeUDPServerSockets()
 {
@@ -1291,11 +1292,13 @@ void broadcastFunction(const pipefunc_t& func, bool skipSelf)
     }
   }
 }
-void distributeAsyncFunction(const pipefunc_t& func)
+
+uint32_t g_disthashseed;
+void distributeAsyncFunction(const std::string& question, const pipefunc_t& func)
 {
-  static unsigned int counter;
-  unsigned int target = 1 + (++counter % (g_pipes.size()-1));
-  // cerr<<"Sending to: "<<target<<endl;
+  unsigned int hash = hashQuestion(question.c_str(), question.length(), g_disthashseed);
+  unsigned int target = 1 + (hash % (g_pipes.size()-1));
+
   if(target == t_id) {
     func();
     return;
@@ -1306,8 +1309,7 @@ void distributeAsyncFunction(const pipefunc_t& func)
   tmsg->wantAnswer = false;
   
   if(write(tps.writeToThread, &tmsg, sizeof(tmsg)) != sizeof(tmsg))
-    unixDie("write to thread pipe returned wrong size or error");
-    
+    unixDie("write to thread pipe returned wrong size or error");    
 }
 
 void handlePipeRequest(int fd, FDMultiplexer::funcparam_t& var)
@@ -1515,7 +1517,7 @@ void handleUDPServerResponse(int fd, FDMultiplexer::funcparam_t& var)
   pident.id=dh.id;
   pident.fd=fd;
 
-  if(!dh.qr) {
+  if(!dh.qr && g_logCommonErrors) {
     L<<Logger::Warning<<"Not taking data from question on outgoing socket from "<< fromaddr.toStringWithPort()  <<endl;
   }
 
@@ -1778,6 +1780,8 @@ int serviceMain(int argc, char*argv[])
 
   showProductVersion();
   seedRandom(::arg()["entropy-source"]);
+  g_disthashseed=dns_random(0xffffffff);
+
   parseACLs();
   
   if(!::arg()["dont-query"].empty()) {
@@ -1812,6 +1816,8 @@ int serviceMain(int argc, char*argv[])
     g_quiet=false;
   }
   
+  SyncRes::s_minimumTTL = ::arg().asNum("minimum-ttl-override");
+
   checkLinuxIPv6Limits();
   try {
     vector<string> addrs;  
@@ -1838,9 +1844,6 @@ int serviceMain(int argc, char*argv[])
     exit(99);
   }
 
-  SyncRes::s_doAAAAAdditionalProcessing = ::arg().mustDo("aaaa-additional-processing");
-  SyncRes::s_doAdditionalProcessing = ::arg().mustDo("additional-processing") | SyncRes::s_doAAAAAdditionalProcessing;
-  
   SyncRes::s_noEDNSPing = true; // ::arg().mustDo("disable-edns-ping");
   SyncRes::s_noEDNS = ::arg().mustDo("disable-edns");
   if(!SyncRes::s_noEDNS) {
@@ -1867,6 +1870,8 @@ int serviceMain(int argc, char*argv[])
   g_initialDomainMap = parseAuthAndForwards();
 
   g_prefetchRatio=min(::arg().asNum("prefetch-ratio"), 90); 
+ 
+  g_latencyStatSize=::arg().asNum("latency-statistic-size");
     
   g_logCommonErrors=::arg().mustDo("log-common-errors");
 
@@ -1986,8 +1991,8 @@ try
 
   t_fdm=getMultiplexer();
   if(!t_id) {
-    if(::arg().mustDo("experimental-json-interface")) {
-      L<<Logger::Warning << "Enabling JSON interface" << endl;
+    if(::arg().mustDo("experimental-webserver")) {
+      L<<Logger::Warning << "Enabling web server" << endl;
       try {
         new RecursorWebServer(t_fdm);
       }
@@ -2051,18 +2056,20 @@ try
     t_fdm->run(&g_now);
     // 'run' updates g_now for us
 
-    if(listenOnTCP) {
-      if(TCPConnection::getCurrentConnections() > maxTcpClients) {  // shutdown, too many connections
-        for(tcpListenSockets_t::iterator i=g_tcpListenSockets.begin(); i != g_tcpListenSockets.end(); ++i)
-          t_fdm->removeReadFD(*i);
-        listenOnTCP=false;
+    if(!g_weDistributeQueries || !t_id) { // if pdns distributes queries, only tid 0 should do this
+      if(listenOnTCP) {
+	if(TCPConnection::getCurrentConnections() > maxTcpClients) {  // shutdown, too many connections
+	  for(tcpListenSockets_t::iterator i=g_tcpListenSockets.begin(); i != g_tcpListenSockets.end(); ++i)
+	    t_fdm->removeReadFD(*i);
+	  listenOnTCP=false;
+	}
       }
-    }
-    else {
-      if(TCPConnection::getCurrentConnections() <= maxTcpClients) {  // reenable
-        for(tcpListenSockets_t::iterator i=g_tcpListenSockets.begin(); i != g_tcpListenSockets.end(); ++i)
-          t_fdm->addReadFD(*i, handleNewTCPQuestion);
-        listenOnTCP=true;
+      else {
+	if(TCPConnection::getCurrentConnections() <= maxTcpClients) {  // reenable
+	  for(tcpListenSockets_t::iterator i=g_tcpListenSockets.begin(); i != g_tcpListenSockets.end(); ++i)
+	    t_fdm->addReadFD(*i, handleNewTCPQuestion);
+	  listenOnTCP=true;
+	}
       }
     }
   }
@@ -2097,8 +2104,6 @@ int main(int argc, char **argv)
     ::arg().set("soa-minimum-ttl","Don't change")="0";
     ::arg().set("soa-serial-offset","Don't change")="0";
     ::arg().set("no-shuffle","Don't change")="off";
-    ::arg().set("additional-processing","turn on to do additional processing")="off";
-    ::arg().set("aaaa-additional-processing","turn on to do AAAA additional processing (slow)")="off";
     ::arg().set("local-port","port to listen on")="53";
     ::arg().set("local-address","IP addresses to listen on, separated by spaces or commas. Also accepts ports.")="127.0.0.1";
     ::arg().set("trace","if we should output heaps of logging. set to 'fail' to only log failing domains")="off";
@@ -2113,7 +2118,6 @@ int main(int argc, char **argv)
     ::arg().set("processes", "Launch this number of processes (EXPERIMENTAL, DO NOT CHANGE)")="1";
     ::arg().set("config-name","Name of this virtual configuration - will rename the binary image")="";
     ::arg().set( "experimental-logfile", "Filename of the log file for JSON parser" )= "/var/log/pdns.log"; 
-    ::arg().setSwitch( "experimental-json-interface", "If we should run a JSON webserver") = "no";
     ::arg().setSwitch("experimental-webserver", "Start a webserver for monitoring") = "no";
     ::arg().set("experimental-webserver-address", "IP Address of webserver to listen on") = "127.0.0.1";
     ::arg().set("experimental-webserver-port", "Port of webserver to listen on") = "8082";
@@ -2138,7 +2142,7 @@ int main(int argc, char **argv)
     ::arg().set("max-mthreads", "Maximum number of simultaneous Mtasker threads")="2048";
     ::arg().set("max-tcp-clients","Maximum number of simultaneous TCP clients")="128";
     ::arg().set("server-down-max-fails","Maximum number of consecutive timeouts (and unreachables) to mark a server as down ( 0 => disabled )")="64";
-    ::arg().set("server-down-throttle-time","Number of seconds to throttle all queries to a server after being maked as down")="60";
+    ::arg().set("server-down-throttle-time","Number of seconds to throttle all queries to a server after being marked as down")="60";
     ::arg().set("hint-file", "If set, load root hints from this file")="";
     ::arg().set("max-cache-entries", "If set, maximum number of entries in the main cache")="1000000";
     ::arg().set("max-negative-ttl", "maximum number of seconds to keep a negative cached entry in memory")="3600";
@@ -2166,12 +2170,14 @@ int main(int argc, char **argv)
     ::arg().set("serve-rfc1918", "If we should be authoritative for RFC 1918 private IP space")="";
     ::arg().set("lua-dns-script", "Filename containing an optional 'lua' script that will be used to modify dns answers")="";
     ::arg().set("prefetch-ratio", "Prefetch RR if request within <number> percent of TTL. 0=off, maximum is 90")="10";
+    ::arg().set("latency-statistic-size","Number of latency values to calculate the qa-latency average")="10000";
 //    ::arg().setSwitch( "disable-edns-ping", "Disable EDNSPing - EXPERIMENTAL, LEAVE DISABLED" )= "no"; 
     ::arg().setSwitch( "disable-edns", "Disable EDNS - EXPERIMENTAL, LEAVE DISABLED" )= ""; 
     ::arg().setSwitch( "disable-packetcache", "Disable packetcache" )= "no"; 
     ::arg().setSwitch( "pdns-distributes-queries", "If PowerDNS itself should distribute queries over threads (EXPERIMENTAL)")="no";
     ::arg().setSwitch( "any-to-tcp","Answer ANY queries with tc=1, shunting to TCP" )="no";
     ::arg().set("udp-truncation-threshold", "Maximum UDP response size before we truncate")="1680";
+    ::arg().set("minimum-ttl-override", "Set under adverse conditions, a minimum TTL")="0";
 
     ::arg().set("include-dir","Include *.conf files from this directory")="";
 
@@ -2201,9 +2207,9 @@ int main(int argc, char **argv)
     ::arg().set("delegation-only")=toLower(::arg()["delegation-only"]);
 
     if(::arg().mustDo("help")) {
-      cerr<<"syntax:"<<endl<<endl;
-      cerr<<::arg().helpstring(::arg()["help"])<<endl;
-      exit(99);
+      cout<<"syntax:"<<endl<<endl;
+      cout<<::arg().helpstring(::arg()["help"])<<endl;
+      exit(0);
     }
     if(::arg().mustDo("version")) {
       showProductVersion();

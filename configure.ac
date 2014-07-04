@@ -35,6 +35,10 @@ LT_INIT
 
 AM_CONDITIONAL([RELEASE_BUILD], [test "$PACKAGE_VERSION" != "git"])
 
+# Define full_libdir to be the fully expanded (${exec_prefix}, etc.)
+# "system" library path.
+# We use this to search for other libraries.
+eval full_libdir="\"$libdir\""
 
 # detect pkg-config explicitly
 PKG_PROG_PKG_CONFIG
@@ -158,6 +162,7 @@ AC_SUBST(DYNLINKFLAGS)
 PDNS_ENABLE_VERBOSE_LOGGING
 PDNS_WITH_SYSTEM_POLARSSL
 PDNS_ENABLE_BOTAN
+PDNS_ENABLE_PKCS11
 PDNS_WITH_CRYPTOPP
 PDNS_ENABLE_REMOTEBACKEND_HTTP
 PDNS_ENABLE_REMOTEBACKEND_ZEROMQ
@@ -240,6 +245,9 @@ for a in $modules $dynmodules; do
       PDNS_WITH_ORACLE
       needoracle=yes
       ;;
+    lmdb)
+      PDNS_WITH_LMDB
+      ;;
     mydns|gmysql|pdns)
       PDNS_WITH_MYSQL
       ;;
@@ -312,6 +320,8 @@ AC_CONFIG_FILES([
   pdns/Makefile
   codedocs/Makefile
   pdns/pdns
+  pdns/ext/yahttp/Makefile
+  pdns/ext/yahttp/yahttp/Makefile
   modules/bindbackend/Makefile
   modules/db2backend/Makefile
   modules/geobackend/Makefile
@@ -328,6 +338,7 @@ AC_CONFIG_FILES([
   modules/randombackend/Makefile
   modules/remotebackend/Makefile
   modules/tinydnsbackend/Makefile
+  modules/lmdbbackend/Makefile
 ])
 AC_OUTPUT
 

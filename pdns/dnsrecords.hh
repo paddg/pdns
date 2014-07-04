@@ -201,6 +201,16 @@ private:
   string d_content;
 };
 
+class DNAMERecordContent : public DNSRecordContent
+{
+public:
+  includeboilerplate(DNAME)
+
+private:
+  string d_content;
+};
+
+
 class MRRecordContent : public DNSRecordContent
 {
 public:
@@ -591,6 +601,7 @@ template<class Convertor>                                         \
 void RNAME##RecordContent::xfrPacket(Convertor& conv)             \
 {                                                                 \
   CONV;                                                           \
+  if (conv.eof() == false) throw MOADNSException("All data was not consumed"); \
 }                                                                 \
 
 struct EDNSOpts

@@ -282,16 +282,15 @@ public:
   
   static void doEDNSDumpAndClose(int fd);
 
-  static unsigned int s_queries;
-  static unsigned int s_outgoingtimeouts;
-  static unsigned int s_throttledqueries;
-  static unsigned int s_dontqueries;
-  static unsigned int s_outqueries;
-  static unsigned int s_tcpoutqueries;
-  static unsigned int s_nodelegated;
-  static unsigned int s_unreachables;
-  static bool s_doAAAAAdditionalProcessing;
-  static bool s_doAdditionalProcessing;
+  static uint64_t s_queries;
+  static uint64_t s_outgoingtimeouts;
+  static uint64_t s_throttledqueries;
+  static uint64_t s_dontqueries;
+  static uint64_t s_outqueries;
+  static uint64_t s_tcpoutqueries;
+  static uint64_t s_nodelegated;
+  static uint64_t s_unreachables;
+  static unsigned int s_minimumTTL;
   static bool s_doIPv6;
   unsigned int d_outqueries;
   unsigned int d_tcpoutqueries;
@@ -438,7 +437,6 @@ private:
   bool doCNAMECacheCheck(const string &qname, const QType &qtype, vector<DNSResourceRecord>&ret, int depth, int &res);
   bool doCacheCheck(const string &qname, const QType &qtype, vector<DNSResourceRecord>&ret, int depth, int &res);
   void getBestNSFromCache(const string &qname, set<DNSResourceRecord>&bestns, bool* flawedNSSet, int depth, set<GetBestNSAnswer>& beenthere);
-  void addCruft(const string &qname, vector<DNSResourceRecord>& ret);
   string getBestNSNamesFromCache(const string &qname,set<string, CIStringCompare>& nsset, bool* flawedNSSet, int depth, set<GetBestNSAnswer>&beenthere);
   void addAuthorityRecords(const string& qname, vector<DNSResourceRecord>& ret, int depth);
 
@@ -546,12 +544,13 @@ struct RecursorStats
   uint64_t nxDomains;
   uint64_t noErrors;
   uint64_t answers0_1, answers1_10, answers10_100, answers100_1000, answersSlow;
-  uint64_t avgLatencyUsec;
-  uint64_t qcounter;
+  double avgLatencyUsec;
+  uint64_t qcounter;     // not increased for unauth packets
   uint64_t ipv6qcounter;
   uint64_t tcpqcounter;
-  uint64_t unauthorizedUDP;
-  uint64_t unauthorizedTCP;
+  uint64_t unauthorizedUDP;  // when this is increased, qcounter isn't
+  uint64_t unauthorizedTCP;  // when this is increased, qcounter isn't
+  uint64_t policyDrops;
   uint64_t tcpClientOverflow;
   uint64_t clientParseError;
   uint64_t serverParseError;
@@ -623,7 +622,7 @@ ComboAddress parseIPAndPort(const std::string& input, uint16_t port);
 ComboAddress getQueryLocalAddress(int family, uint16_t port);
 typedef boost::function<void*(void)> pipefunc_t;
 void broadcastFunction(const pipefunc_t& func, bool skipSelf = false);
-void distributeAsyncFunction(const pipefunc_t& func);
+void distributeAsyncFunction(const std::string& question, const pipefunc_t& func);
 
 int directResolve(const std::string& qname, const QType& qtype, int qclass, vector<DNSResourceRecord>& ret);
 

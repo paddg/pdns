@@ -188,7 +188,7 @@ void apiServerSearchLog(HttpRequest* req, HttpResponse* resp) {
     throw HttpMethodNotAllowedException();
 
   string prefix = " " + s_programname + "[";
-  resp->body = logGrep(req->parameters["q"], ::arg()["experimental-logfile"], prefix);
+  resp->body = logGrep(req->getvars["q"], ::arg()["experimental-logfile"], prefix);
 }
 
 void apiServerStatistics(HttpRequest* req, HttpResponse* resp) {
@@ -237,7 +237,7 @@ string apiZoneIdToName(const string& id) {
     } else {
       throw HttpBadRequestException();
     }
-    c = c * 10;
+    c = c * 16;
 
     // decode unit place
     if (id[pos+2] >= '0' && id[pos+2] <= '9') {

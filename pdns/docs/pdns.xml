@@ -25,10 +25,10 @@
   </bookinfo>
   
   <chapter id="powerdns">
-    <title>The PowerDNS dynamic nameserver</title>
+    <title>The PowerDNS Authoritative Server</title>
 
     <para>
-      The PowerDNS daemon is a versatile nameserver which supports a large number
+      The PowerDNS Authoritative Server is a versatile nameserver which supports a large number
       of backends. These backends can either be <link linkend="bindbackend">plain zone files</link> or be 
       <link linkend="pipebackend">more dynamic</link> in nature. Additionally, through use of clever programming techniques,
       PowerDNS offers very high domain resolution performance.
@@ -37,7 +37,7 @@
       Prime examples of backends include relational databases, but also (geographical) load balancing and failover algorithms. 
     </para>
     <para>
-      The company is called PowerDNS.COM BV, the nameserver daemon is called PDNS.
+      The company is called PowerDNS.COM BV, the nameserver daemons are called PowerDNS Authoritative Server and PowerDNS Recursor.
     </para>
 
     <sect1 id="function-design"><title>Function &amp; design of PDNS</title>
@@ -65,11 +65,11 @@
       </para>
       <para>
 	Another prime goal is <link linkend="security">security</link>. By the use of language features, the PDNS source code 
-	is very small (in the order of  10.000 lines) which makes auditing easy. In the same way, library features have been used 
+	is reasonably small which makes auditing easy. In the same way, library features have been used 
 	to mitigate the risks of buffer overflows.
       </para>
       <para>
-	Finally, PDNS is able to give a lot of <link linkend="monitoring">statistics</link> on its operation which is both helpful in 
+	Finally, PowerDNS is able to give a lot of <link linkend="monitoring">statistics</link> on its operation which is both helpful in 
 	determining the scalability of an installation as well as for spotting problems.
       </para>
     </sect1>
@@ -93,6 +93,282 @@
       <para>
 	Beyond PowerDNS 2.9.20, the Authoritative Server and Recursor are released separately.
       </para>
+      <sect2 id="changelog-recursor-3.6.0"><title>PowerDNS Recursor version 3.6.0</title>
+      <note>
+        <para>
+          Downloads:
+          <itemizedlist>
+            <listitem>
+              <para>
+                <ulink url="https://www.powerdns.com/downloads.html">Official download page</ulink>
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <ulink url="http://www.monshouwer.eu/download/3rd_party/pdns-recursor/">native RHEL5/6 packages from Kees Monshouwer</ulink>
+              </para>
+            </listitem>
+          </itemizedlist>
+        </para>
+      </note>
+      <para>
+        This is a performance, feature and bugfix update to 3.5/3.5.3. It contains
+        important fixes for slightly broken domain names, which your users expect to
+        work anyhow. It also brings robust resilience against certain classes of
+        attacks.
+      </para>
+        <para>
+          Changes between RC1 and release:
+          <itemizedlist>
+            <listitem>
+              <para>
+                g30b13ef: do not apply some of our filters to root and gtlds, plus remove some useless {}
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                gcc81d90: fix yahttp copy in dist-recursor for BSD cp
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                gb798618: define __APPLE_USE_RFC_3542 during recursor build on Darwin, fixes t1449
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                g1d7f863: Merge pull request t1443 from zeha/recursor-nostrip
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                g5cdeede: remove (non-working) [aaaa-]additional-processing flags from the recursor. Closes t1448
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                g984d747: Support building recursor on kFreeBSD and Hurd
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                g79240f1: Allow not stripping of binaries in recursor's make install
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                ge9c2ad3: document pdns.DROP for recursor, add policy-drops metric for it
+              </para>
+            </listitem>
+          </itemizedlist>
+        </para>
+        <para>
+	  New features:
+        <itemizedlist>
+          <listitem>
+            <para>
+              gaadceba: Implement minimum-ttl-override config setting, plus runtime configurability via 'rec_control set-minimum-ttl'.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Lots of work on the JSON API, which is exposed via Aki Tuomi's 'yahttp'. Massive thanks to Christian Hofstaedtler for delivering
+	      this exciting new functionality. Documentation &amp; demo forthcoming, but code to use it is available
+	      <ulink url="https://github.com/powerdns/pdnscontrol">on GitHub</ulink>.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Lua modules can now use 'pdnslog(INFO..'), as described in t1074, implemented in g674a305
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+	      Adopt any-to-tcp feature to the recursor. Based on a patch by Winfried Angele. Closes t836, g56b4d21 and ge661a20.
+            </para>
+          </listitem>
+	  <listitem>
+            <para>
+	      g2c78bd5: implement built-in statistics dumper using the 'carbon' protocol, which is also understood by metronome (our mini-graphite). Use 'carbon-server', 'carbon-ourname' and 'carbon-interval' settings.
+	    </para>
+	  </listitem>
+
+          <listitem>
+            <para>
+	      New setting 'udp-truncation-threshold' to configure from how many bytes we should truncate. ga09a8ce.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+	      Proper support for CHaos class for CHAOS TXT queries. gc86e1f2, addition for lua in gf94c53d, some warnings
+	      in g438db54 however.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+	      Added support for Lua scripts to drop queries w/o further processing. g0478c54.
+            </para>
+          </listitem>
+	  <listitem>
+            <para>
+	      Kevin Holly added qtype statistics to recursor and rec_control (get-qtypelist) (g79332bf)
+            </para>
+          </listitem>
+	  <listitem>
+            <para>
+	      Add support for include-files in configuration, also reload ACLs and zones defined in them (g829849d, g242b90e, g302df81).
+	    </para>
+	  </listitem>
+
+	  <listitem>
+            <para>
+	      Paulo Anes contributed server-down-max-fails which helps combat Recursive DNS based amplification attacks. 
+	      Described in <ulink url="http://blog.powerdns.com/2014/04/03/further-dos-guidance-packages-and-patches-available/">this post</ulink>. Also comes with new metric 'failed-host-entries' in g406f46f.
+	    </para>
+	  </listitem>
+    <listitem>
+      <para>
+        g21e7976: Implement "followCNAMERecords" feature in the Lua hooks.
+      </para>
+    </listitem>
+
+	</itemizedlist>
+
+	  Improvements:
+        <itemizedlist>
+          <listitem>
+            <para>
+              g06ea901: make pdns-distributes-queries use a hash so related queries get sent to the same thread. Original idea by Winfried Angele. Astoundingly effective, approximately halves CPU usage!
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              gb13e737: --help now writes to stdout instead of stderr. Thanks Winfried Angele.
+            </para>
+          </listitem>
+
+          <listitem>
+            <para>
+              To aid in limiting DoS attacks, when truncating a response, we actually truncate all the way
+	      so only the question remains. Suggested in t1092, code in gadd935a.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+	      No longer experimental, the switch 'pdns-distributes-queries' can improve multi-threaded performance on Linux (various cleanup commits).
+            </para>
+          </listitem>
+
+          <listitem>
+            <para>
+	      Update to embedded PolarSSL, plus remove previous AES implementation and shift to PolarSSL (ge22d9b4, g990ad9a)
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+	      g92c0733 moves various Lua magic constants into an enum namespace.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+	      set group and supplementary groups before chroot (g6ee50ce, t1198).
+            </para>
+          </listitem>
+	  <listitem>
+            <para>
+	      g4e9a20e: raise our socket buffer setting so it no longer generates a warning about lowering it.
+	    </para>
+	  </listitem>
+	  <listitem>
+            <para>
+	      g4e9a20e: warn about Linux suboptimal IPv6 settings if we detect them.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+            <para>
+	      SIGUSR2 turns on a 'trace' of all DNS traffic, a second SIGUSR2 now turns it off again. g4f217ce.
+	    </para>
+	  </listitem>
+          <listitem>
+            <para>
+	      Various fixes for Lua 5.2.
+            </para>
+          </listitem>
+	  <listitem>
+            <para>
+    g81859ba: No longer attempt to answer questions coming in from port 0, reply would not reach them anyhow.  Thanks
+to Niels Bakker and 'sid3windr' for insight &amp; debugging.  Closes t844.
+	    </para>
+	  </listitem>
+	  <listitem>
+            <para>
+	      gb1a2d6c: now, I'm not one to get OCD over things, but that log message about stats based on 1801 seconds got to
+	      me.  1800 now.
+	    </para>
+	  </listitem>
+
+	</itemizedlist>
+	Fixes:
+	<itemizedlist>
+    <listitem>
+      <para>
+        0c9de4fc: stay away from getaddrinfo unless we really can't help it for ascii ipv6 conversions to binary
+      </para>
+    </listitem>
+
+    <listitem>
+      <para>
+        g08f3f63: fix average latency calculation, closing t424.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        g75ba907: Some of our counters were still 32 bits, now 64.
+      </para>
+    </listitem>
+    <listitem>
+            <para>
+	      g2f22827: Fix statistics and stability when running with pdns-distributes-queries.
+	    </para>
+	  </listitem>
+	  <listitem>
+            <para>
+	      g6196f90: avoid merging old and new additional data, fixes an issue caused by weird (but probably legal) Akamai behaviour
+	    </para>
+	  </listitem>
+	  <listitem>
+            <para>
+	      g3a8a4d6: make sure we don't exceed the number of available filedescriptors for mthreads. Raises performance 
+	      in case of DoS. See <ulink url="http://blog.powerdns.com/2014/02/06/related-to-recent-dos-attacks-recursor-configuration-file-guidance/">this post</ulink> for further details.
+            </para>
+          </listitem>
+	  <listitem>
+            <para>
+	      g7313fe6: implement indexed packet cache wiping for recursor, orders of magnitude faster. Important
+	      when reloading all zones, which causes massive cache cleaning.
+	    </para>
+	  </listitem>
+	  <listitem>
+            <para>
+	      rec_control get-all would include 'cache-bytes' and 'packetcache-bytes', which were expensive operations,
+	      too expensive for frequent polling. Removed in g8e42d27.
+	    </para>
+	  </listitem>
+
+          <listitem>
+            <para>
+              All old workarounds for supporting Windows of the XP era have been removed. 
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Fix issues on S390X based systems which have unsigned characters (g916a0fd)
+            </para>
+          </listitem>
+	</itemizedlist>
+	</para>
+      </sect2>
       <sect2 id="changelog-auth-3-3-1"><title>PowerDNS Authoritative Server version 3.3.1</title>
        <warning><para>Version 3.3.1 of the PowerDNS Authoritative Server is a major upgrade if you are coming from 2.9.x. There are also some important changes if you are coming from 3.0, 3.1 or 3.2.
   Please refer to <xref linkend="from2.9to3.0"/>, <xref linkend="from3.0to3.1"/>, <xref linkend="from3.1to3.2"/>, <xref linkend="from3.2to3.3"/> and <xref linkend="from3.3to3.3.1"/> for important information on 
@@ -11482,7 +11758,7 @@ name         IN            A        192.0.2.4
     <sect1 id="configuring-mysql"><title>Example: configuring MySQL</title>
       <para>
 	Connect to MySQL as a user with sufficient privileges and issue the following commands:
-   <programlisting><xi:include  href="../../modules/gmysqlbackend/no-dnssec.schema.mysql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+   <programlisting><xi:include  href="../../modules/gmysqlbackend/schema.mysql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
 	
 	Now we have a database and an empty table. PDNS should now be able to launch in monitor mode and display no errors:
 
@@ -12013,11 +12289,6 @@ local0.err                        /var/log/pdns.err
     </para>
 
     <para>
-      Much the same holds for the <command>wildcards</command> setting. On by default, each non-existent query will lead to a number of additional
-      wildcard queries. If it is known that the backends do not contain wildcard records, performance can be improved by adding <command>wildcards=no</command>
-      to <filename>pdns.conf</filename>.
-    </para>
-    <para>
       Logging truly kills performance as answering a question from the cache is an order of magnitude less work than logging a 
       line about it. Busy sites will prefer to turn <command>log-dns-details</command> off.
     </para>
@@ -12444,27 +12715,39 @@ create index recordorder on records (domain_id, ordername text_pattern_ops);
       </para>
     </note>
     <para>
-      A GSQL Backend schema change is necessary for new features.
-      For MySQL:
-      <screen>
-ALTER TABLE records ADD disabled BOOLEAN DEFAULT 0;
-</screen>
-      For PostgreSQL:
-      <screen>
-ALTER TABLE records ADD disabled BOOLEAN DEFAULT 'f';
-</screen>
-      For SQLite 3:
-      <screen>
-ALTER TABLE records ADD disabled BOOLEAN DEFAULT 0;
-</screen>
-      For Oracle:
+      <warning>
+        <para>
+          The default database schema has changed. The database update below is mandatory.
+        </para>
+        <para>
+          If custom queries are in use, they probably need an update.
+        </para>
+      </warning>
+    </para>
+    <para>
+      For gmysql backend with nodnssec schema:
+      <programlisting><xi:include  href="../../modules/gmysqlbackend/nodnssec-3.x_to_3.4_schema.mysql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+      For gmysql backend with dnssec schema:
+      <programlisting><xi:include  href="../../modules/gmysqlbackend/dnssec-3.x_to_3.4_schema.mysql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+      For gpgsql backend with nodnssec schema:
+      <programlisting><xi:include  href="../../modules/gpgsqlbackend/nodnssec-3.x_to_3.4_schema.pgsql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+      For gpgsql backend with dnssec schema:
+      <programlisting><xi:include  href="../../modules/gpgsqlbackend/dnssec-3.x_to_3.4_schema.pgsql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+      For gsqlite3 backend with nodnssec schema:
+      <programlisting><xi:include  href="../../modules/gsqlite3backend/nodnssec-3.x_to_3.4_schema.sqlite3.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+      For gsqlite3 backend with dnssec schema:
+      <programlisting><xi:include  href="../../modules/gsqlite3backend/dnssec-3.x_to_3.4_schema.sqlite3.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+      For goracle backend:
       <screen>
 ALTER TABLE records ADD disabled INT DEFAULT 0;
-</screen>
+ALTER TABLE records MODIFY auth INT DEFAULT 1;
+
+UPDATE records SET auth=1 WHERE auth IS NULL;
+      </screen>
     </para>
   </sect1>
-
   </chapter>
+
   <chapter id="powerdnssec-auth">
   <title>Serving authoritative DNSSEC data</title>
   <para>
@@ -12912,6 +13195,15 @@ $ pdnssec rectify-zone powerdnssec.org
 	    </listitem>
 	</varlistentry>
 	<varlistentry>
+	    <term>secure-all-zones</term>
+	    <listitem>
+	      <para>
+		Add keymaterial to all zones. You should manually run 'rectify-all-zones' afterwards. The 'increase-serial' option
+		increases the SOA serial for new secured zones.
+	      </para>
+	    </listitem>
+	</varlistentry>
+	<varlistentry>
 	    <term>set-nsec3 ZONE 'parameters' [narrow]</term>
 	    <listitem>
 	      <para>
@@ -13247,6 +13539,47 @@ $ pdnssec rectify-zone powerdnssec.org
   </para>
   </section>
 </section>
+  <section id="dnssec-pkcs11"><title>PKCS#11 support</title>
+    <para>
+      NB! This feature is experimental, and not ready for production. Use at your own risk!
+    </para>
+    <para>
+      To enable it, compile PowerDNS Authoritative Server using --experimental-pkcs11-support flag. This requires you to have p11-kit libraries and headers. 
+    </para>
+    <para> 
+      Instructions on how to setup SoftHSM to work with the feature after compilation on ubuntu/debian.
+      <itemizedlist>
+      <listitem><para>apt-get install softhsm p11-kit</para></listitem>
+      <listitem><para>create directory /etc/pkcs11/modules</para></listitem>
+      <listitem><para>Add file called 'softhsm' there with (on some versions, use softhsm.module)
+<programlisting>
+module: /home/cmouse/softhsm/lib/softhsm/libsofthsm.so
+managed: yes
+</programlisting>
+</para></listitem>
+      <listitem><para>Run p11-kit -l to verify it worked (you should see softhsm there)</para></listitem>
+      <listitem><para>Create at least two tokens (ksk and zsk) with (slot-number starts from 0)
+<programlisting>
+softhsm --init-token --slot slot-number --label zone-ksk|zone-zsk --pin some-pin --so-pin another-pin 
+</programlisting>
+</para></listitem>
+      <listitem><para>Run p11-kit -l to verify it worked (you should see softhsm there and tokens)</para></listitem>
+      <listitem><para>Assign the keys using
+<programlisting>
+pdnssec hsm assign zone rsasha256 ksk|zsk softhsm slot-id pin zone-ksk|zsk
+</programlisting>
+</para></listitem>
+      <listitem><para>Take note of the generated key id, if it always shows up 1, run pdnssec show-zone zone to retrieve them</para></listitem>
+      <listitem><para>Generate the keys using
+<programlisting>
+pdnssec hsm create-key zone key-id
+</programlisting>
+</para></listitem>
+      <listitem><para>Verify that everything worked with pdnssec show-zone zone, you should see valid data there</para></listitem>
+      <listitem><para>Enjoy using PKCS#11!</para></listitem>
+      </itemizedlist>
+    </para>
+  </section>
   <section id="dnssec-transfers"><title>Secure transfers</title>
   <para>
     From 3.3.1 and up, PowerDNS support secure DNSSEC transfers as described in <ulink
@@ -13320,6 +13653,7 @@ $ pdnssec rectify-zone powerdnssec.org
     <listitem><para>Jan-Piet Mens</para></listitem>
     <listitem><para>Justin Clift</para></listitem>
     <listitem><para>Kees Monshouwer</para></listitem>
+    <listitem><para>Aki Tuomi</para></listitem>
     <listitem><para>.. this list is far from complete yet .. </para></listitem>
     </itemizedlist>
   </para>
@@ -14158,6 +14492,15 @@ sql> insert into domainmetadata (domain_id, kind, content) values (6, 'TSIG-ALLO
 	      </para>
 	    </listitem>
 	  </varlistentry>
+          <varlistentry>
+            <term>any-to-tcp | any-to-tcp=yes | any-to-tcp=no</term>
+            <listitem>
+              <para>
+                Answer questions for the ANY type on UDP with a truncated packet that refers the
+                remote server to TCP. Useful for mitigating ANY reflection attacks. Defaults to off.
+              </para>
+            </listitem>
+          </varlistentry>
 
 	  <varlistentry>
 	    <term>auth-can-lower-ttl</term>
@@ -14179,6 +14522,20 @@ sql> insert into domainmetadata (domain_id, kind, content) values (6, 'TSIG-ALLO
 	      </para>
 	    </listitem>
 	  </varlistentry>
+	  <varlistentry><term>carbon-ourname=...</term>
+	    <listitem><para>
+		If sending carbon updates, if set, this will override our hostname. See <xref linkend="metrics-carbon"/>. Available beyond 3.5.3.
+	      </para></listitem></varlistentry>
+	  <varlistentry><term>carbon-server=...</term>
+	    <listitem><para>
+		If set to an IP or IPv6 address, will send all available metrics to this server
+		via the carbon protocol, which is used by graphite and metronome. See <xref linkend="metrics-carbon"/>. Available beyond 3.5.3.
+	      </para></listitem></varlistentry>
+	  <varlistentry><term>carbon-interval=...</term>
+	    <listitem><para>
+		If sending carbon updates, this is the interval between them in seconds. See <xref linkend="metrics-carbon"/>. Available beyond 3.5.3.
+	      </para></listitem></varlistentry>
+
 	  <varlistentry><term>chroot</term>
 	    <listitem><para>
 		If set, chroot to this directory for more security. See <xref linkend="security"/>.
@@ -14227,15 +14584,6 @@ sql> insert into domainmetadata (domain_id, kind, content) values (6, 'TSIG-ALLO
 	      </para>
 	    </listitem>
 	  </varlistentry>
-          <varlistentry>
-            <term>any-to-tcp | any-to-tcp=yes | any-to-tcp=no</term>
-            <listitem>
-              <para>
-                Answer questions for the ANY type on UDP with a truncated packet that refers the
-                remote server to TCP. Useful for mitigating ANY reflection attacks. Defaults to off.
-              </para>
-            </listitem>
-          </varlistentry>
 	  <varlistentry>
 	    <term>dont-query</term>
 	    <listitem>
@@ -14336,6 +14684,14 @@ sql> insert into domainmetadata (domain_id, kind, content) values (6, 'TSIG-ALLO
 	    <listitem>
 	      <para>
 		If set, the root-hints are read from this file. If unset, default root hints are used. Available since version 2.9.19.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>latency-statistic-size</term>
+	    <listitem>
+	      <para>
+		Indication of how many queries will be averaged to get the average latency reported by the 'qa-latency' metric. Since 3.6.
 	      </para>
 	    </listitem>
 	  </varlistentry>
@@ -14442,6 +14798,17 @@ sql> insert into domainmetadata (domain_id, kind, content) values (6, 'TSIG-ALLO
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
+	    <term>minimum-ttl-override</term>
+	    <listitem>
+	      <para>
+		Available since 3.6, this setting artificially raises all TTLs to be at least this long. While this is a gross hack, 
+		and violates RFCs, under conditions of DoS, it may enable you to continue serving your customers. Can be set at runtime using
+		'rec_control set-minimum-ttl 3600'. To disable, set to 0 (the default).
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry>
 	    <term>network-timeout</term>
 	    <listitem>
 	      <para>
@@ -14465,6 +14832,16 @@ sql> insert into domainmetadata (domain_id, kind, content) values (6, 'TSIG-ALLO
 	      </para>
 	    </listitem>
 	  </varlistentry>
+	  <varlistentry>
+	    <term>pdns-distributes-queries</term>
+	    <listitem>
+	      <para>
+		If set, PowerDNS will have only 1 thread listening on client sockets, and distribute work by itself over threads. Improves
+		performance on Linux. Do not use on Recursor versions before 3.6 as the feature was experimental back then, and not that stable.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
 	  <varlistentry>
 	    <term>query-local-address</term>
 	    <listitem>
@@ -14510,6 +14887,19 @@ sql> insert into domainmetadata (domain_id, kind, content) values (6, 'TSIG-ALLO
 	      </para>
 	    </listitem>
 	  </varlistentry>
+	  <varlistentry>
+	    <term>server-down-max-fails</term>
+	    <term>server-down-throttle-time</term>
+	    <listitem>
+	      <para>
+		If a server has not responded in any way this many times in a row, no longer send it any queries
+		for server-down-throttle-time seconds. Afterwards, we will try a new packet, and if that also
+		gets no response at all, we again throttle for server-down-throttle-time-seconds. Even a single
+		response packet will drop the block. Available and on by default since 3.6.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
 	  <varlistentry>
 	    <term>server-id</term>
 	    <listitem>
@@ -14701,6 +15091,17 @@ sql> insert into domainmetadata (domain_id, kind, content) values (6, 'TSIG-ALLO
 		</para>
 	      </listitem>
 	    </varlistentry>	  
+	    <varlistentry>
+	      <term>set-minimum-ttl</term>
+	      <listitem>
+		<para>
+		Available since 3.6, this setting artificially raises all TTLs to be at least this long. While this is a gross hack, 
+		and violates RFCs, under conditions of DoS, it may enable you to continue serving your customers. Corresponds
+		to the configuration file setting 'minimum-ttl-override'. 
+		</para>
+	      </listitem>
+	    </varlistentry>	  
+
 	    <varlistentry>
 	      <term>top-remotes</term>
 	      <listitem>
@@ -15001,6 +15402,7 @@ packetcache-bytes   Size of the packet cache in bytes (since 3.3.1)
 packetcache-entries Size of packet cache (since 3.2)
 packetcache-hits    Packet cache hits (since 3.2)
 packetcache-misses  Packet cache misses (since 3.2)
+policy-drops        Packets dropped because of (Lua) policy decision
 qa-latency          shows the current latency average, in microseconds
 questions           counts all End-user initiated queries with the RD bit set
 ipv6-questions      counts all End-user initiated queries with the RD bit set, received over IPv6 UDP
@@ -15015,7 +15417,7 @@ tcp-questions       counts all incoming TCP queries (since starting)
 throttled-out       counts the number of throttled outgoing UDP queries since starting
 throttle-entries    shows the number of entries in the throttle map
 unauthorized-tcp    number of TCP questions denied because of allow-from restrictions
-unauthorized-udp    number of UDP questions denied because of allow-from restrictions
+unauthorized-udp    number of UDP questions denied because of allow-from restrictions 
 unexpected-packets  number of answers from remote servers that were unexpected (might point to spoofing)
 uptime              number of seconds process has been running (since 3.1.5)
 user-msec           number of CPU milliseconds spent in 'user' mode
@@ -15024,7 +15426,10 @@ user-msec           number of CPU milliseconds spent in 'user' mode
 	graphs of all these numbers. Use <command>rec_control get-all</command> to get all statistics in one go.
       </para>
       <para>
-	It should be noted that answers0-1 + answers1-10 + answers10-100 + answers100-1000 + packetcache-hits + over-capacity-drops = questions.
+	It should be noted that answers0-1 + answers1-10 + answers10-100 + answers100-1000 + packetcache-hits + over-capacity-drops + policy-drops = questions.
+      </para>
+      <para>
+	Also note that unauthorized-tcp and unauthorized-udp packets do not end up in the 'questions' count. 
       </para>
       <para>
 	Every half our or so, the recursor outputs a line with statistics. More infrastructure is planned so as to allow
@@ -15051,14 +15456,7 @@ Feb 10 14:16:03 stats: 125784 questions, 13971 cache entries, 309 negative entri
 	programming language.
       </para>
       <para>
-	<warning>
-	  <para>
-	    This functionality is expected to change from version to version as additional scripting needs become apparent!
-	  </para>
-	</warning>
-      </para>
-      <para>
-	These scripts can be used to quickly override dangerous domains, for load balancing or for legal or commercial purposes.
+	These scripts can be used to quickly override dangerous domains, fix things that are wrong, for load balancing or for legal or commercial purposes.
       </para>
       <para>
 	As of 3.1.7, queries can be intercepted in two places: before the resolving logic starts to work, plus after the resolving process failed to find
@@ -15157,7 +15555,8 @@ end
 	  '25 smtp.example.net.'.
 	</para>
 	<para>
-	  Useful return 'rcodes' include 0 for "no error" and <function>pdns.NXDOMAIN</function> for "NXDOMAIN".
+	  Useful return 'rcodes' include 0 for "no error", <function>pdns.NXDOMAIN</function> for "NXDOMAIN", <function>pdns.DROP</function> to drop the question
+	  from further processing (since 3.6, and such a drop is accounted in the 'policy-drops' metric).
 	</para>
 	<para>
 	  Fields that can be set in the return table include:
@@ -15266,6 +15665,13 @@ end
 	<para>
 	  To get fake AAAA records for DNS64 usage, use <function>return "getFakeAAAARecords", domain, "fe80::21b:77ff:0:0"</function>. Available since version 3.4.
 	</para>
+	<sect3><title>CNAME chain resolution</title>
+	  <para>
+	    It may be useful to return a CNAME record for Lua, and then have the PowerDNS Recursor continue resolving that CNAME.
+	    This can be achieved by returning: "followCNAMERecords", 0, {{qtype=pdns.CNAME, content="www.powerdns.com"}}. This indicates
+	    an rcode of 0 and the records to put in the record. But the first string instruct PowerDNS to complete the CNAME chain. Available since 3.6.
+	  </para>
+	</sect3>
       </sect2>
     </sect1>
     <sect1 id="dns64"><title>DNS64 support in the PowerDNS Recursor</title>
@@ -15707,7 +16113,7 @@ To enable a Lua script for a particular slave zone, determine the domain_id for 
 	containing one or more replacement records to be stored in the back-end database. If, on the other hand, your 
 	function decides not to modify a record, it must return pdns.PASS and an empty table indicating that PowerDNS should 
 	handle the incoming record as normal. If your function decides to drop a query and not respond whatsoever, it must return
-  pdns.DROP and an empty table indicating that the recursor does not want to process the packet in Lua nor in the core recursor logic.
+	pdns.DROP and an empty table indicating that the recursor does not want to process the packet in Lua nor in the core recursor logic.
       </para>
       <para>
 	Consider the following simple example:
@@ -15895,7 +16301,8 @@ To enable a Lua script for a particular slave zone, determine the domain_id for 
 	  <term>also-notify=...</term>
 	  <listitem>
 	    <para>
-	      When notifying a domain, also notify these nameservers. Example: <command>also-notify=192.168.0.1, 10.0.0.1</command>.
+	      When notifying a domain, also notify these nameservers. Example: <command>also-notify=192.168.0.1, 10.0.0.1</command>. The IP adresses listed in <command>
+	      also-notify</command> always receive a notification. Even if they do not mach the list in <command>only-notify</command>.
 	    </para>
 	  </listitem>
 	</varlistentry>
@@ -15908,6 +16315,20 @@ To enable a Lua script for a particular slave zone, determine the domain_id for 
 	    <listitem><para>
 		Seconds to store packets in the PacketCache. See <xref linkend="packetcache"/>.
 	      </para></listitem></varlistentry>
+	  <varlistentry><term>carbon-ourname=...</term>
+	    <listitem><para>
+		If sending carbon updates, if set, this will override our hostname. See <xref linkend="metrics-carbon"/>. Available beyond 3.3.1.
+	      </para></listitem></varlistentry>
+	  <varlistentry><term>carbon-server=...</term>
+	    <listitem><para>
+		If set to an IP or IPv6 address, will send all available metrics to this server
+		via the carbon protocol, which is used by graphite and metronome. See <xref linkend="metrics-carbon"/>. Available beyond 3.3.1.
+	      </para></listitem></varlistentry>
+	  <varlistentry><term>carbon-interval=...</term>
+	    <listitem><para>
+		If sending carbon updates, this is the interval between them in seconds. See <xref linkend="metrics-carbon"/>. Available beyond 3.3.1.
+	      </para></listitem></varlistentry>
+
 	  <varlistentry><term>chroot=...</term>
 	    <listitem><para>
 		If set, chroot to this directory for more security. See <xref linkend="security"/>.
@@ -15932,6 +16353,10 @@ To enable a Lua script for a particular slave zone, determine the domain_id for 
 	    <listitem><para>
 		name to insert in the SOA record if none set in the backend
 	      </para></listitem></varlistentry>
+	  <varlistentry><term>default-soa-mail=...</term>
+	    <listitem><para>
+		mail address to insert in the SOA record if none set in the backend
+	      </para></listitem></varlistentry>
 	  <varlistentry><term>default-ttl=...</term>
 	    <listitem><para>
 		TTL to use when none is provided.
@@ -15943,6 +16368,11 @@ To enable a Lua script for a particular slave zone, determine the domain_id for 
    	  <varlistentry><term>disable-axfr=...</term>
 	    <listitem><para>
 		Do not allow zone transfers. Before 2.9.10, this could be overridden by allow-axfr-ips.
+	      </para></listitem></varlistentry>
+	  <varlistentry><term>disable-axfr-rectify=...</term>
+	    <listitem><para>
+		Disable the rectify step during an outgoing AXFR. Only required for regression testing.
+		Default is no.
 	      </para></listitem></varlistentry>
 	  <varlistentry><term>disable-tcp=...</term>
 	    <listitem><para>
@@ -15967,6 +16397,11 @@ To enable a Lua script for a particular slave zone, determine the domain_id for 
 	  <varlistentry><term>entropy-source=...</term>
 	    <listitem><para>
 	    	Entropy source (like /dev/urandom).
+	      </para></listitem></varlistentry>
+	  <varlistentry><term>experimental-dname-processing=...</term>
+	    <listitem><para>
+		Synthesise CNAME records from DNAME records as required. This approximately doubles query load. Do not combine
+		with DNSSEC!
 	      </para></listitem></varlistentry>
 	  <varlistentry><term>fancy-records=...</term>
 	    <listitem><para>
@@ -17280,6 +17715,36 @@ This setting will make PowerDNS renotify the slaves after an AXFR is *received* 
       </variablelist>
     </para>
   </chapter>
+  <chapter id="metrics-carbon"><title>PowerDNS Metrics, and how to display them</title>
+    <warning>
+      <para>
+	Available in releases after PowerDNS Authoritative Server 3.3.1 and PowerDNS Recursor 3.5.3.
+      </para>
+    </warning>
+    <para>
+      Both PowerDNS daemons generate ample metrics which can be used to monitor performance. These metrics
+      can be polled using the rec_control and pdns_control commands, and they are also available via the http-based API.
+      Finally, they can be pushed to a Carbon/Graphite server, either native carbon, or our own Metronome implementation.
+    </para>
+    <para>
+      For carbon/graphite/metronome, we use the following namespace. Everything starts with 'pdns.', which is then followed
+      by the local hostname. Thirdly, we add either 'auth' or 'recursor' to siginify the daemon generating the metrics. 
+      This is then rounded off with the actual name of the metric. As an example: 'pdns.ns1.recursor.questions'.
+    </para>
+    <para>
+      Care has been taken to make the sending of statistics as unobtrusive as possible, the daemons will not be
+      hindered by an unreachable carbon server, timeouts or connection refused situations.
+    </para>
+    <para>
+      To benefit from our carbon/graphite support, either install Graphite, or use our own lightweight 
+      statistics daemon, Metronome, currently available on <ulink url="https://github.com/ahupowerdns/metronome/">GitHub</ulink>. 
+    </para>
+    <para>
+      Secondly, set carbon-server, possibly carbon-interval, possibly carbon-ourname in the configuration.
+    </para>
+  </chapter>
+  
+
   <appendix id="backends-detail"><title>Backends in detail</title>
     <para>
       This appendix lists several of the available backends in more detail
@@ -17320,6 +17785,10 @@ This setting will make PowerDNS renotify the slaves after an AXFR is *received* 
 	      <para>
 		Command to launch as backend. Mandatory.
 	      </para>
+        <para>
+    Or the path to a unix domain socket file. The socket should already be open and listening before pdns starts.
+    Available since version 3.3.
+        </para>
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
@@ -17359,6 +17828,7 @@ This setting will make PowerDNS renotify the slaves after an AXFR is *received* 
 		If not set the default pipebackend-abi-version is 1. When set to 2, the local-ip-address field is added
 		after the remote-ip-address. (the local-ip-address refers to the IP address the question was received on). When
 		set to 3, the real remote IP/subnet is added based on edns-subnet support (this also requires enabling 'edns-subnet-processing').
+                When set to 4 it sends zone name in AXFR request.
 	      </para>
 	    </listitem>
 	  </varlistentry>
@@ -17463,9 +17933,9 @@ query that precedes an AXFR, edns-subnet is always set to 0.0.0.0/0.
 <para>
 AXFR-queries look like this:
 <screen>
-AXFR	id
+AXFR	id	zoneName
 </screen>
-The id is gathered from the answer to a SOA query.
+The id is gathered from the answer to a SOA query. ZoneName is given in ABI version 4. 
 
 </para> 
  </sect3>
@@ -17708,14 +18178,10 @@ authoritative).
 	</para>
 	<para>
 	  The default setup conforms to the following schema:
-	  <programlisting><xi:include  href="../../modules/gmysqlbackend/no-dnssec.schema.mysql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+	  <programlisting><xi:include  href="../../modules/gmysqlbackend/schema.mysql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
 	</para>
 	<para>
 	  Zone2sql with the --gmysql flag also assumes this layout is in place.
-	</para>
-	<para>
-	To support or migrate to DNSSEC, the following SQL statements must be executed:
-          <programlisting><xi:include  href="../../modules/gmysqlbackend/dnssec.schema.mysql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>	
 	</para>
 	<para>
 	  For full migration notes, please see <xref linkend="dnssec-migration"/>.
@@ -17743,7 +18209,7 @@ REFERENCES `domains` (`id`) ON DELETE CASCADE;
       <sect2><title>PostgreSQL specifics</title>
       <para>
 	The default setup conforms to the following schema, which you should add to a PostgreSQL database.
-	<programlisting><xi:include  href="../../modules/gpgsqlbackend/no-dnssec.schema.pgsql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+	<programlisting><xi:include  href="../../modules/gpgsqlbackend/schema.pgsql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
       </para>
       <para>
 	Zone2sql with the --gpgsql flag also assumes this layout is in place.
@@ -17751,10 +18217,6 @@ REFERENCES `domains` (`id`) ON DELETE CASCADE;
       <para>
 	This schema contains all elements needed for master, slave and superslave operation.
       </para>
-      <para>
-      To support DNSSEC or to migrate to DNSSEC, the following statements have to be issued:
-        <programlisting><xi:include  href="../../modules/gpgsqlbackend/dnssec.schema.pgsql.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>  
-</para>
 	<para>
 	  For full migration notes, please see <xref linkend="dnssec-migration"/>.
 	</para>
@@ -19299,19 +19761,10 @@ VALUES (:zoneid, :ip)
 	        Before you can use this backend you first have to set it up and fill it with data.	        
 	        The default setup conforms to the following schema:
 	        
-	        <programlisting><xi:include  href="../../modules/gsqlite3backend/no-dnssec.schema.sqlite3.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
+	        <programlisting><xi:include  href="../../modules/gsqlite3backend/schema.sqlite3.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
 	      </para>
 	      <para>
 	        This schema contains all elements needed for master, slave and superslave operation.	  
-	      </para>
-	      <para>
-		To support DNSSEC, or to migrate to DNSSEC, the following statements must be issued:
-	      </para>
-	      <para>
-		      <programlisting><xi:include  href="../../modules/gsqlite3backend/dnssec.schema.sqlite3.sql"  parse="text"  xmlns:xi="http://www.w3.org/2001/XInclude"/></programlisting>
-	      </para>
-	      <para>
-		For full migration notes, please see <xref linkend="dnssec-migration"/>.
 	      </para>
 	      <para>
 	        After you have created the database you probably want to fill it with data. 
@@ -19612,6 +20065,180 @@ VALUES (:zoneid, :ip)
 	    </varlistentry>
 	  </variablelist>
 	</para>
+      </sect2>
+    </sect1>
+
+    <sect1 id="lmdbbackend"><title>LMDB (high performance) backend</title>
+      <para>
+	<table>
+	  <title>LMDB backend capabilities</title>
+	  <tgroup cols="2">
+	    <tbody>
+	      <row><entry>Native</entry><entry>Yes</entry></row>
+	      <row><entry>Master</entry><entry>No</entry></row>
+	      <row><entry>Slave</entry><entry>No</entry></row>
+	      <row><entry>Superslave</entry><entry>No</entry></row>
+	      <row><entry>Autoserial</entry><entry>No</entry></row>
+	      <row><entry>DNSSEC</entry><entry>No</entry></row>
+	      <row><entry>Module name</entry><entry>lmdb</entry></row>
+	      <row><entry>Launch</entry><entry>lmdb</entry></row>
+	    </tbody>
+	  </tgroup>
+	</table>
+      </para>
+      <para>
+      Based on the <ulink url="http://symas.com/mdb/">LMDB key-value
+      database</ulink>, the LMDB backend turns powerdns into a very high
+      performance and DDOS-resilient authoritative DNS server. Testing on a
+      32-core server shows the ability to answer up to 400,000 queries per second
+      with instant startup and real-time updates independent of database size.
+      </para>
+      <para>
+	<variablelist>
+	  <varlistentry>
+	    <term>lmdb-datapath=</term>
+	    <listitem>
+	      <para>
+            Location of the database to load
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </para>
+      <sect2>
+	<title>Operation</title>
+	<para>
+      Unlike other backends LMDB does not require any special configuration.
+      New or updated zones are available the next query after the update
+      transaction is committed. If the underlying database is removed or
+      recreated then the reload command should be sent through to powerdns to
+      get it to close and reopen the database.
+	</para>
+    </sect2>
+      <sect2><title>Database Format</title>
+	<para>
+        A full example script for generating a database can be found in
+        pdns/modules/lmdbbackend/lmdb-example.pl. Basically the database
+        environment is comprised of three databases to store the data:
+	</para>
+        <sect3><title>zone database</title>
+        <para>
+            Each key in the zone database is the reversed lower-cased name of
+            the zone without
+            leading or trailing dots (ie for example.com the key would be moc.elpmaxe).
+        </para>
+        <para>
+          Each value in the database must contain the following data (tab-separated):
+          <variablelist>
+            <varlistentry>
+              <term>Zone ID</term>
+              <listitem>
+                <para>The Zone's unique integer ID in ASCII (32-bit)</para>
+              </listitem>
+            </varlistentry>
+            <varlistentry>
+              <term>TTL</term>
+              <listitem>
+                <para>The TTL for the zone's SOA record</para>
+              </listitem>
+            </varlistentry>
+            <varlistentry>
+              <term>SOA data</term>
+              <listitem>
+                <para>space-separated SOA data eg
+                <screen>
+                ns.foo.com. hostmaster.foo.com. &lt;serial&gt; &lt;refresh&gt; &lt;retry&gt; &lt;expire&gt; &lt;minimum&gt;
+                </screen>
+                If refresh, retry, expire or minimum are not specified then the powerdns defaults will be used
+                </para>
+              </listitem>
+            </varlistentry>
+          </variablelist>
+        </para>
+        </sect3>
+        <sect3 id="lmdb-data"><title>data database</title>
+        <para>
+            This database is required to have been created with the MDB_DUPSORT flag enabled. It stores the records for each domain.
+            Each key must contain the following data (tab-separated):
+          <variablelist>
+            <varlistentry>
+              <term>Record name</term>
+              <listitem>
+                <para>The reversed lower-cased name of the record and zone without leading or trailing dots</para>
+              </listitem>
+            </varlistentry>
+            <varlistentry>
+              <term>Record type</term>
+              <listitem>
+                <para>The type of record A, NS, PTR etc. SOA is not allowed as it is automatically created from the zone database records.</para>
+              </listitem>
+            </varlistentry>
+          </variablelist>
+          </para>
+          <para>
+            The value for each entry must contain the following data
+            (tab-separated). If the length of this record is greater than the
+            LMDB limit of 510 bytes (for DUPSORT databases) an entry of "REF"
+            followed by the tab character and a unique 32-bit ASCII integer
+            which contains a reference into <xref linkend="lmdb-extended-data" />.
+          <variablelist>
+            <varlistentry>
+              <term>Zone ID</term>
+              <listitem>
+                <para>The Zone's unique integer ID in ASCII (32-bit)</para>
+              </listitem>
+            </varlistentry>
+            <varlistentry>
+              <term>TTL</term>
+              <listitem>
+                <para>The TTL for the SOA record</para>
+              </listitem>
+            </varlistentry>
+            <varlistentry>
+              <term>Record data</term>
+              <listitem>
+                <para>
+                The record's data entry. For MX/SRV records the
+                priority is the first field and space-separated from the rest
+                of the data. Care must be taken to escape the data
+                appropriately for PowerDNS. As in the Pipe backend " and \
+                characters are not allowed and any it is advised that any
+                characters outside of ASCII 32-126 are escaped using the \
+                character.
+                </para>
+              </listitem>
+            </varlistentry>
+          </variablelist>
+        </para>
+        </sect3>
+        <sect3 id="lmdb-extended-data"><title>extended_data database</title>
+        <para>
+        If the length of the value that you wish to insert into <xref
+        linkend="lmdb-data" /> is longer than 510 bytes you need to create the
+        REF entry as described above linked in to this table. The value is a
+        unique 32-bit integer value formatted in ASCII and the value is the
+        exact same format as it would have been in <xref linkend="lmdb-data" />
+        but can be however long you require.
+        </para>
+        </sect3>
+
+        <sect3><title>Example database structure</title>
+        <para>
+        (as output by the pdns/modules/lmdbbackend/lmdb-example.pl example script and shown by pdns/modules/lmdbbackend/dumpdb.pl)
+        <screen>
+        # perl dumpdb.pl /var/tmp/lmdb zone
+        key: moc.elpmaxe; value: 1      300     ns.example.com. hostmaster.example.com. 2012021101 86400 7200 604800 86400
+        # perl dumpdb.pl /var/tmp/lmdb data
+        key: moc.elpmaxe        MX; value: 1    300     10 mail.hotmail.com
+        key: moc.elpmaxe        NS; value: 1    300     ns.example.com
+        key: moc.elpmaxe.tset   A; value: 1     300     1.2.3.4
+        key: moc.elpmaxe.txet   TXT; value: 1   300     test\010123
+        key: moc.elpmaxe.txetgnol       TXT; value: REF 1
+        # perl dumpdb.pl /var/tmp/lmdb extended_data
+        key: 1; value: 1        300     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        </screen>
+        </para>
+        </sect3>
       </sect2>
     </sect1>
 
